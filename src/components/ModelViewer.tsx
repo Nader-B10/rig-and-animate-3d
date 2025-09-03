@@ -20,9 +20,10 @@ interface ModelProps {
   activeAnimation: string | null;
   isPlaying: boolean;
   importedAnimations: ImportedAnimation[];
+  onModelSceneReady?: (scene: THREE.Object3D, animations: THREE.AnimationClip[]) => void;
 }
 
-function Model({ url, onAnimationsFound, activeAnimation, isPlaying, importedAnimations }: ModelProps) {
+function Model({ url, onAnimationsFound, activeAnimation, isPlaying, importedAnimations, onModelSceneReady }: ModelProps) {
   const group = useRef<THREE.Group>(null);
   const { scene, animations } = useGLTF(url);
   
@@ -43,6 +44,11 @@ function Model({ url, onAnimationsFound, activeAnimation, isPlaying, importedAni
       const animNames = allAnimationClips.map(anim => anim.name);
       onAnimationsFound(animNames);
       
+      // Notify parent about scene and animations for exporting
+      if (onModelSceneReady) {
+        onModelSceneReady(scene, allAnimationClips);
+      }
+      
       const originalCount = animations.length;
       const importedCount = importedAnimations.length;
       
@@ -52,7 +58,7 @@ function Model({ url, onAnimationsFound, activeAnimation, isPlaying, importedAni
         toast.success(`تم العثور على ${originalCount} انميشن!`);
       }
     }
-  }, [allAnimationClips, onAnimationsFound, animations.length, importedAnimations.length]);
+  }, [allAnimationClips, onAnimationsFound, animations.length, importedAnimations.length, scene, onModelSceneReady]);
 
   useEffect(() => {
     if (activeAnimation && actions[activeAnimation]) {
@@ -92,9 +98,10 @@ interface ModelViewerProps {
   modelUrl: string | null;
   onUpload: () => void;
   importedAnimations: ImportedAnimation[];
+  onModelSceneReady?: (scene: THREE.Object3D, animations: THREE.AnimationClip[]) => void;
 }
 
-export const ModelViewer = ({ modelUrl, onUpload, importedAnimations }: ModelViewerProps) => {
+export const ModelViewer = ({ modelUrl, onUpload, importedAnimations, onModelSceneReady }: ModelViewerProps) => {
   const [animations, setAnimations] = useState<string[]>([]);
   const [activeAnimation, setActiveAnimation] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -141,6 +148,7 @@ export const ModelViewer = ({ modelUrl, onUpload, importedAnimations }: ModelVie
                 activeAnimation={activeAnimation}
                 isPlaying={isPlaying}
                 importedAnimations={importedAnimations}
+                onModelSceneReady={onModelSceneReady}
               />
               <OrbitControls
                 enablePan={true}

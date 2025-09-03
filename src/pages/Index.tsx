@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ModelViewer } from '@/components/ModelViewer';
 import { FileUpload } from '@/components/FileUpload';
 import { AnimationImporter } from '@/components/AnimationImporter';
+import { ModelExporter } from '@/components/ModelExporter';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Download, Github, Sparkles } from 'lucide-react';
@@ -18,6 +19,8 @@ const Index = () => {
   const [modelUrl, setModelUrl] = useState<string | null>(null);
   const [showUpload, setShowUpload] = useState(false);
   const [importedAnimations, setImportedAnimations] = useState<ImportedAnimation[]>([]);
+  const [modelScene, setModelScene] = useState<THREE.Object3D | null>(null);
+  const [allAnimations, setAllAnimations] = useState<THREE.AnimationClip[]>([]);
 
   const handleFileSelect = (url: string) => {
     setModelUrl(url);
@@ -39,6 +42,11 @@ const Index = () => {
 
   const handleAnimationImport = (animations: ImportedAnimation[]) => {
     setImportedAnimations(animations);
+  };
+
+  const handleModelSceneReady = (scene: THREE.Object3D, animations: THREE.AnimationClip[]) => {
+    setModelScene(scene);
+    setAllAnimations(animations);
   };
 
   return (
@@ -145,10 +153,20 @@ const Index = () => {
 
               {/* Animation Importer - Only show when model is loaded */}
               {modelUrl && (
-                <AnimationImporter 
-                  onAnimationImport={handleAnimationImport}
-                  importedAnimations={importedAnimations}
-                />
+                <div className="space-y-4">
+                  <AnimationImporter 
+                    onAnimationImport={handleAnimationImport}
+                    importedAnimations={importedAnimations}
+                  />
+                  
+                  {/* Model Exporter - Show when model is loaded */}
+                  <ModelExporter 
+                    modelUrl={modelUrl}
+                    importedAnimations={importedAnimations}
+                    modelScene={modelScene}
+                    allAnimations={allAnimations}
+                  />
+                </div>
               )}
             </div>
           </div>
@@ -159,6 +177,7 @@ const Index = () => {
               modelUrl={modelUrl} 
               onUpload={handleUpload}
               importedAnimations={importedAnimations}
+              onModelSceneReady={handleModelSceneReady}
             />
           </div>
         </div>

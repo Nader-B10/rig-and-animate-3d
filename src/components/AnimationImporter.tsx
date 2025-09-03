@@ -88,12 +88,16 @@ export const AnimationImporter = ({ onAnimationImport, importedAnimations }: Ani
           <div className="mb-4 p-4 rounded-lg bg-secondary/20 border border-secondary/30">
             <h4 className="font-medium text-foreground mb-2">رفع أنميشن من Mixamo</h4>
             <p className="text-sm text-muted-foreground mb-3">
-              ارفع ملف GLB أو GLTF يحتوي على الأنميشن من Mixamo
+              يمكن رفع عدة ملفات أنميشن من Mixamo لدمجها مع المودل
             </p>
             <FileUpload 
               onFileSelect={handleAnimationFile}
               className="bg-transparent border-dashed border-primary/30"
+              multiple={true}
             />
+            <p className="text-xs text-muted-foreground mt-2">
+              نصيحة: يمكن رفع عدة ملفات أنميشن واحدة تلو الأخرى أو مجموعة واحدة
+            </p>
           </div>
         )}
 

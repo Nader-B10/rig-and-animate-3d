@@ -8,27 +8,30 @@ import { toast } from 'sonner';
 interface FileUploadProps {
   onFileSelect: (url: string) => void;
   className?: string;
+  multiple?: boolean;
 }
 
-export const FileUpload = ({ onFileSelect, className }: FileUploadProps) => {
+export const FileUpload = ({ onFileSelect, className, multiple = false }: FileUploadProps) => {
   const onDrop = useCallback((acceptedFiles: File[]) => {
-    const file = acceptedFiles[0];
-    if (!file) return;
+    if (!acceptedFiles.length) return;
 
-    // Validate file type
-    const validTypes = ['.gltf', '.glb'];
-    const fileExtension = file.name.toLowerCase().split('.').pop();
-    
-    if (!fileExtension || !validTypes.includes(`.${fileExtension}`)) {
-      toast.error('نوع الملف غير مدعوم. يرجى رفع ملف GLB أو GLTF');
-      return;
-    }
+    // Process files
+    acceptedFiles.forEach((file) => {
+      // Validate file type
+      const validTypes = ['.gltf', '.glb'];
+      const fileExtension = file.name.toLowerCase().split('.').pop();
+      
+      if (!fileExtension || !validTypes.includes(`.${fileExtension}`)) {
+        toast.error(`نوع الملف غير مدعوم: ${file.name}. يرجى رفع ملف GLB أو GLTF`);
+        return;
+      }
 
-    // Create object URL for the file
-    const url = URL.createObjectURL(file);
-    onFileSelect(url);
+      // Create object URL for the file
+      const url = URL.createObjectURL(file);
+      onFileSelect(url);
+    });
     
-    toast.success(`تم رفع الملف: ${file.name}`);
+    toast.success(`تم رفع ${acceptedFiles.length} ملف${acceptedFiles.length > 1 ? '' : ''}`);
   }, [onFileSelect]);
 
   const { getRootProps, getInputProps, isDragActive, isDragReject } = useDropzone({
@@ -37,7 +40,7 @@ export const FileUpload = ({ onFileSelect, className }: FileUploadProps) => {
       'model/gltf-binary': ['.glb'],
       'model/gltf+json': ['.gltf'],
     },
-    multiple: false,
+    multiple: multiple,
   });
 
   return (
@@ -77,6 +80,8 @@ export const FileUpload = ({ onFileSelect, className }: FileUploadProps) => {
         <p className="text-muted-foreground mb-4">
           {isDragReject 
             ? 'نوع الملف غير مدعوم'
+            : multiple
+            ? 'اسحب وأفلت ملفات GLB أو GLTF هنا، أو انقر للاختيار (يمكن اختيار عدة ملفات)'
             : 'اسحب وأفلت ملف GLB أو GLTF هنا، أو انقر للاختيار'
           }
         </p>
