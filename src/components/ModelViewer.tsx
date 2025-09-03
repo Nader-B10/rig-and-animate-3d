@@ -7,25 +7,52 @@ import { Play, Pause, RotateCcw, Upload } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { toast } from 'sonner';
 
+interface ImportedAnimation {
+  id: string;
+  name: string;
+  url: string;
+  clip: THREE.AnimationClip;
+}
+
 interface ModelProps {
   url: string;
   onAnimationsFound: (animations: string[]) => void;
   activeAnimation: string | null;
   isPlaying: boolean;
+  importedAnimations: ImportedAnimation[];
 }
 
-function Model({ url, onAnimationsFound, activeAnimation, isPlaying }: ModelProps) {
+function Model({ url, onAnimationsFound, activeAnimation, isPlaying, importedAnimations }: ModelProps) {
   const group = useRef<THREE.Group>(null);
   const { scene, animations } = useGLTF(url);
-  const { actions, mixer } = useAnimations(animations, group);
+  
+  // Combine original animations with imported ones
+  const allAnimationClips = [...animations];
+  importedAnimations.forEach(imported => {
+    // Create a copy of the clip to avoid conflicts
+    const clonedClip = imported.clip.clone();
+    clonedClip.name = imported.name;
+    allAnimationClips.push(clonedClip);
+  });
+  
+  const { actions, mixer } = useAnimations(allAnimationClips, group);
   
   useEffect(() => {
-    if (animations.length > 0) {
-      const animNames = animations.map(anim => anim.name);
+    const totalAnimations = allAnimationClips.length;
+    if (totalAnimations > 0) {
+      const animNames = allAnimationClips.map(anim => anim.name);
       onAnimationsFound(animNames);
-      toast.success(`تم العثور على ${animNames.length} انميشن!`);
+      
+      const originalCount = animations.length;
+      const importedCount = importedAnimations.length;
+      
+      if (importedCount > 0) {
+        toast.success(`المودل: ${originalCount} أنميشن، Mixamo: ${importedCount} أنميشن`);
+      } else {
+        toast.success(`تم العثور على ${originalCount} انميشن!`);
+      }
     }
-  }, [animations, onAnimationsFound]);
+  }, [allAnimationClips, onAnimationsFound, animations.length, importedAnimations.length]);
 
   useEffect(() => {
     if (activeAnimation && actions[activeAnimation]) {
@@ -64,9 +91,10 @@ function Model({ url, onAnimationsFound, activeAnimation, isPlaying }: ModelProp
 interface ModelViewerProps {
   modelUrl: string | null;
   onUpload: () => void;
+  importedAnimations: ImportedAnimation[];
 }
 
-export const ModelViewer = ({ modelUrl, onUpload }: ModelViewerProps) => {
+export const ModelViewer = ({ modelUrl, onUpload, importedAnimations }: ModelViewerProps) => {
   const [animations, setAnimations] = useState<string[]>([]);
   const [activeAnimation, setActiveAnimation] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -112,6 +140,7 @@ export const ModelViewer = ({ modelUrl, onUpload }: ModelViewerProps) => {
                 onAnimationsFound={handleAnimationsFound}
                 activeAnimation={activeAnimation}
                 isPlaying={isPlaying}
+                importedAnimations={importedAnimations}
               />
               <OrbitControls
                 enablePan={true}
@@ -184,20 +213,28 @@ export const ModelViewer = ({ modelUrl, onUpload }: ModelViewerProps) => {
           </div>
           
           <div className="flex flex-wrap gap-2">
-            {animations.map((animName) => (
-              <Button
-                key={animName}
-                onClick={() => setActiveAnimation(animName)}
-                variant={activeAnimation === animName ? "default" : "outline"}
-                size="sm"
-                className={activeAnimation === animName ? 
-                  "gradient-primary text-white shadow-glow" : 
-                  "bg-secondary/50 border-secondary text-secondary-foreground hover:bg-secondary"
-                }
-              >
-                {animName}
-              </Button>
-            ))}
+            {animations.map((animName) => {
+              // Check if this is an imported animation
+              const isImported = importedAnimations.some(imported => imported.name === animName);
+              
+              return (
+                <Button
+                  key={animName}
+                  onClick={() => setActiveAnimation(animName)}
+                  variant={activeAnimation === animName ? "default" : "outline"}
+                  size="sm"
+                  className={activeAnimation === animName ? 
+                    "gradient-primary text-white shadow-glow" : 
+                    isImported ? 
+                      "bg-accent/20 border-accent/30 text-accent-foreground hover:bg-accent/30" :
+                      "bg-secondary/50 border-secondary text-secondary-foreground hover:bg-secondary"
+                  }
+                >
+                  {animName}
+                  {isImported && <span className="ml-1 text-xs opacity-70">M</span>}
+                </Button>
+              );
+            })}
           </div>
         </Card>
       )}
