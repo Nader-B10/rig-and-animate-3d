@@ -1,20 +1,23 @@
 import * as THREE from 'three';
+import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+
 
 export class ModelOptimizer {
   static optimizeGeometry(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
-    // Remove duplicate vertices
-    geometry.mergeVertices();
+    // Remove duplicate vertices using BufferGeometryUtils
+    const merged = mergeVertices(geometry);
+    const target = merged ?? geometry;
     
     // Compute normals if missing
-    if (!geometry.attributes.normal) {
-      geometry.computeVertexNormals();
+    if (!target.attributes.normal) {
+      target.computeVertexNormals();
     }
     
     // Compute bounding box and sphere for frustum culling
-    geometry.computeBoundingBox();
-    geometry.computeBoundingSphere();
+    target.computeBoundingBox();
+    target.computeBoundingSphere();
     
-    return geometry;
+    return target;
   }
 
   static optimizeMaterial(material: THREE.Material): THREE.Material {
@@ -32,7 +35,11 @@ export class ModelOptimizer {
       if (child instanceof THREE.Mesh) {
         // Optimize geometry
         if (child.geometry) {
-          this.optimizeGeometry(child.geometry);
+          const optimized = this.optimizeGeometry(child.geometry);
+          if (optimized !== child.geometry) {
+            child.geometry.dispose();
+            child.geometry = optimized;
+          }
         }
         
         // Optimize materials

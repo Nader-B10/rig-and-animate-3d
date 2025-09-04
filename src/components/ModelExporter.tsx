@@ -102,10 +102,6 @@ export const ModelExporter = ({
               reject(error);
             }
           },
-          (progress) => {
-            // Optional: Handle progress
-            console.log('Export progress:', progress);
-          },
           (error) => {
             reject(error);
           },

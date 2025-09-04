@@ -1,8 +1,8 @@
 import { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls, useGLTF, useAnimations, Environment, ContactShadows } from '@react-three/drei';
+import { OrbitControls, useAnimations, Environment, ContactShadows } from '@react-three/drei';
 import * as THREE from 'three';
-import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
+import { useModelLoader } from '@/hooks/useModelLoader';
 import { Button } from '@/components/ui/button';
 import { Play, Pause, RotateCcw, Upload } from 'lucide-react';
 import { Card } from '@/components/ui/card';
@@ -27,59 +27,15 @@ interface ModelProps {
 
 function Model({ url, fileType, onAnimationsFound, activeAnimation, isPlaying, importedAnimations, onModelSceneReady }: ModelProps) {
   const group = useRef<THREE.Group>(null);
-  const [modelData, setModelData] = useState<{ scene: THREE.Object3D; animations: THREE.AnimationClip[] } | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const { modelData, isLoading, error } = useModelLoader(url, fileType);
   const [hasNotified, setHasNotified] = useState(false);
   
-  // Load model based on file type
   useEffect(() => {
-    let isCancelled = false;
-    setIsLoading(true);
-    setHasNotified(false);
-    
-    const loadModel = async () => {
-      try {
-        if (fileType === 'fbx') {
-          const loader = new FBXLoader();
-          loader.load(url, (fbx) => {
-            if (isCancelled) return;
-            
-            // Scale FBX models appropriately
-            fbx.scale.setScalar(0.01);
-            
-            setModelData({
-              scene: fbx,
-              animations: fbx.animations || []
-            });
-            setIsLoading(false);
-          }, undefined, (error) => {
-            if (isCancelled) return;
-            console.error('Error loading FBX:', error);
-            toast.error('خطأ في تحميل ملف FBX');
-            setIsLoading(false);
-          });
-        } else {
-          // Use useGLTF for GLTF/GLB files
-          const { scene, animations } = useGLTF(url);
-          if (isCancelled) return;
-          
-          setModelData({ scene, animations });
-          setIsLoading(false);
-        }
-      } catch (error) {
-        if (isCancelled) return;
-        console.error('Error loading model:', error);
-        toast.error('خطأ في تحميل المودل');
-        setIsLoading(false);
-      }
-    };
-
-    loadModel();
-    
-    return () => {
-      isCancelled = true;
-    };
-  }, [url, fileType]);
+    if (error) {
+      console.error('Error loading model:', error);
+      toast.error('خطأ في تحميل المودل');
+    }
+  }, [error]);
   
   // Combine animations with imported ones
   const allAnimationClips = useMemo(() => {
