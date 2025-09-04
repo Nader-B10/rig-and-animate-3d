@@ -25,7 +25,31 @@ export function useModelLoader(url: string | null, fileType: 'gltf' | 'glb' | 'f
       if (type === 'fbx') {
         const loader = new FBXLoader();
         const fbx = await new Promise<THREE.Group>((resolve, reject) => {
-          loader.load(modelUrl, resolve, undefined, reject);
+          loader.load(
+            modelUrl,
+            (object) => {
+              // Fix common FBX loading issues
+              object.traverse((child) => {
+                if (child instanceof THREE.Mesh) {
+                  // Ensure materials are properly set
+                  if (!child.material) {
+                    child.material = new THREE.MeshStandardMaterial({ color: 0x888888 });
+                  }
+                  // Fix bone references if they exist
+                  if ((child as any).skeleton) {
+                    (child as any).skeleton.bones.forEach((bone: THREE.Bone) => {
+                      if (bone) {
+                        bone.matrixAutoUpdate = true;
+                      }
+                    });
+                  }
+                }
+              });
+              resolve(object);
+            },
+            undefined,
+            reject
+          );
         });
         
         // Scale FBX models appropriately
@@ -35,16 +59,42 @@ export function useModelLoader(url: string | null, fileType: 'gltf' | 'glb' | 'f
       } else {
         const loader = new GLTFLoader();
         const gltf = await new Promise<any>((resolve, reject) => {
-          loader.load(modelUrl, resolve, undefined, reject);
+          loader.load(
+            modelUrl,
+            (gltf) => {
+              // Fix GLTF bone issues
+              gltf.scene.traverse((child: THREE.Object3D) => {
+                if (child instanceof THREE.Mesh && (child as any).skeleton) {
+                  (child as any).skeleton.bones.forEach((bone: THREE.Bone) => {
+                    if (bone) {
+                      bone.matrixAutoUpdate = true;
+                    }
+                  });
+                }
+              });
+              resolve(gltf);
+            },
+            undefined,
+            reject
+          );
         });
         
         scene = gltf.scene;
         animations = gltf.animations || [];
       }
       
-      // Optimize the loaded model
-      ModelOptimizer.optimizeScene(scene);
-      animations = ModelOptimizer.optimizeAnimations(animations);
+      // Ensure scene is properly configured
+      scene.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+          child.frustumCulled = true;
+        }
+      });
+      
+      // Don't over-optimize for now to avoid issues
+      // ModelOptimizer.optimizeScene(scene);
+      // animations = ModelOptimizer.optimizeAnimations(animations);
       
       setModelData({ scene, animations });
     } catch (err) {

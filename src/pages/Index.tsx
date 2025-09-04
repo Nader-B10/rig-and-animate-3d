@@ -134,92 +134,90 @@ const Index = () => {
 
       {/* Main Content */}
       <main className="container mx-auto px-6 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 h-[calc(100vh-200px)]">
-          {/* File Upload Panel */}
-          <div className="lg:col-span-1">
-            <div className="space-y-6 h-full overflow-y-auto">
-              <Card className="gradient-card border-border shadow-card-custom">
-                <div className="p-6">
-                  <h2 className="text-xl font-semibold text-foreground mb-4 flex items-center gap-2">
-                    <Download className="w-5 h-5 text-primary" />
-                    رفع المودل
-                  </h2>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+          {/* Left Column - Controls */}
+          <div className="space-y-8 order-2 lg:order-1 lg:max-h-screen lg:overflow-y-auto">
+            <Card className="gradient-card border-border shadow-card-custom">
+              <div className="p-6">
+                <h2 className="text-xl font-semibold text-foreground mb-4 flex items-center gap-2">
+                  <Download className="w-5 h-5 text-primary" />
+                  رفع المودل
+                </h2>
+                
+                {showUpload || !modelUrl ? (
+                  <FileUpload 
+                    onFileSelect={handleFileSelect} 
+                    className="mb-4 bg-transparent border-dashed border-primary/30"
+                  />
+                ) : (
+                  <div className="text-center mb-4">
+                    <div className="w-16 h-16 mx-auto mb-3 rounded-full gradient-hero flex items-center justify-center">
+                      <Sparkles className="w-8 h-8 text-white" />
+                    </div>
+                    <p className="text-foreground font-medium mb-1">المودل محمل بنجاح!</p>
+                    <p className="text-xs text-muted-foreground mb-3">
+                      نوع الملف: {fileType?.toUpperCase()}
+                    </p>
+                    <Button 
+                      onClick={() => setShowUpload(true)}
+                      variant="outline"
+                      size="sm"
+                      className="bg-primary/10 border-primary/20 text-primary"
+                    >
+                      رفع مودل جديد
+                    </Button>
+                  </div>
+                )}
+                
+                <div className="space-y-4 text-sm text-muted-foreground">
+                  <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
+                    <h3 className="font-medium text-foreground mb-2 flex items-center gap-2">
+                      <Info className="w-4 h-4" />
+                      الميزات المدعومة:
+                    </h3>
+                    <ul className="space-y-1">
+                      <li>• ملفات GLB و GLTF و FBX</li>
+                      <li>• الأنميشن المتعددة</li>
+                      <li>• التحكم التفاعلي المحسن</li>
+                      <li>• إضافة أنميشن خارجية</li>
+                      <li>• تصدير مع الأنميشن المدمجة</li>
+                    </ul>
+                  </div>
                   
-                  {showUpload || !modelUrl ? (
-                    <FileUpload 
-                      onFileSelect={handleFileSelect} 
-                      className="mb-4 bg-transparent border-dashed border-primary/30"
-                    />
-                  ) : (
-                    <div className="text-center mb-4">
-                      <div className="w-16 h-16 mx-auto mb-3 rounded-full gradient-hero flex items-center justify-center">
-                        <Sparkles className="w-8 h-8 text-white" />
-                      </div>
-                      <p className="text-foreground font-medium mb-1">المودل محمل بنجاح!</p>
-                      <p className="text-xs text-muted-foreground mb-3">
-                        نوع الملف: {fileType?.toUpperCase()}
-                      </p>
-                      <Button 
-                        onClick={() => setShowUpload(true)}
-                        variant="outline"
-                        size="sm"
-                        className="bg-primary/10 border-primary/20 text-primary"
-                      >
-                        رفع مودل جديد
-                      </Button>
-                    </div>
-                  )}
-                  
-                  <div className="space-y-4 text-sm text-muted-foreground">
-                    <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
-                      <h3 className="font-medium text-foreground mb-2 flex items-center gap-2">
-                        <Info className="w-4 h-4" />
-                        الميزات المدعومة:
-                      </h3>
-                      <ul className="space-y-1">
-                        <li>• ملفات GLB و GLTF و FBX</li>
-                        <li>• الأنميشن المتعددة</li>
-                        <li>• التحكم التفاعلي المحسن</li>
-                        <li>• إضافة أنميشن خارجية</li>
-                        <li>• تصدير مع الأنميشن المدمجة</li>
-                      </ul>
-                    </div>
-                    
-                    <div className="p-4 rounded-lg bg-secondary/20 border border-secondary/30">
-                      <h3 className="font-medium text-foreground mb-2">نصائح للاستخدام:</h3>
-                      <ul className="space-y-1">
-                        <li>• اسحب لتدوير المودل</li>
-                        <li>• اسكرول للتكبير/التصغير</li>
-                        <li>• انقر على أسماء الأنميشن للتبديل</li>
-                        <li>• استخدم Ctrl+اسحب للتحريك</li>
-                      </ul>
-                    </div>
+                  <div className="p-4 rounded-lg bg-secondary/20 border border-secondary/30">
+                    <h3 className="font-medium text-foreground mb-2">نصائح للاستخدام:</h3>
+                    <ul className="space-y-1">
+                      <li>• اسحب لتدوير المودل</li>
+                      <li>• اسكرول للتكبير/التصغير</li>
+                      <li>• انقر على أسماء الأنميشن للتبديل</li>
+                      <li>• استخدم Ctrl+اسحب للتحريك</li>
+                    </ul>
                   </div>
                 </div>
-              </Card>
+              </div>
+            </Card>
 
-              {/* Animation Importer - Only show when model is loaded */}
-              {modelUrl && (
-                <div className="space-y-4">
-                  <AnimationImporter 
-                    onAnimationImport={handleAnimationImport}
-                    importedAnimations={importedAnimations}
-                  />
-                  
-                  {/* Model Exporter - Show when model is loaded */}
-                  <ModelExporter 
-                    modelUrl={modelUrl}
-                    importedAnimations={importedAnimations}
-                    modelScene={modelScene}
-                    allAnimations={allAnimations}
-                  />
-                </div>
-              )}
-            </div>
+            {/* Animation Importer - Only show when model is loaded */}
+            {modelUrl && (
+              <div className="space-y-4">
+                <AnimationImporter 
+                  onAnimationImport={handleAnimationImport}
+                  importedAnimations={importedAnimations}
+                />
+                
+                {/* Model Exporter - Show when model is loaded */}
+                <ModelExporter 
+                  modelUrl={modelUrl}
+                  importedAnimations={importedAnimations}
+                  modelScene={modelScene}
+                  allAnimations={allAnimations}
+                />
+              </div>
+            )}
           </div>
 
-          {/* 3D Viewer */}
-          <div className="lg:col-span-3">
+          {/* Right Column - 3D Viewer */}
+          <div className="order-1 lg:order-2 lg:sticky lg:top-8">
             <ModelViewer 
               modelUrl={modelUrl}
               fileType={fileType}

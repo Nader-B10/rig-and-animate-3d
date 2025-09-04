@@ -3,9 +3,9 @@ import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, useAnimations, Environment, ContactShadows } from '@react-three/drei';
 import * as THREE from 'three';
 import { useModelLoader } from '@/hooks/useModelLoader';
+import { AnimationControls } from '@/components/AnimationControls';
 import { Button } from '@/components/ui/button';
-import { Play, Pause, RotateCcw, Upload } from 'lucide-react';
-import { Card } from '@/components/ui/card';
+import { Upload } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface ImportedAnimation {
@@ -22,10 +22,14 @@ interface ModelProps {
   activeAnimation: string | null;
   isPlaying: boolean;
   importedAnimations: ImportedAnimation[];
+  showSkeleton: boolean;
+  animationProgress: number;
+  onAnimationProgress: (progress: number, duration: number) => void;
+  onSeekAnimation: (time: number) => void;
   onModelSceneReady?: (scene: THREE.Object3D, animations: THREE.AnimationClip[]) => void;
 }
 
-function Model({ url, fileType, onAnimationsFound, activeAnimation, isPlaying, importedAnimations, onModelSceneReady }: ModelProps) {
+function Model({ url, fileType, onAnimationsFound, activeAnimation, isPlaying, importedAnimations, showSkeleton, animationProgress, onAnimationProgress, onSeekAnimation, onModelSceneReady }: ModelProps) {
   const group = useRef<THREE.Group>(null);
   const { modelData, isLoading, error } = useModelLoader(url, fileType);
   const [hasNotified, setHasNotified] = useState(false);
@@ -101,10 +105,33 @@ function Model({ url, fileType, onAnimationsFound, activeAnimation, isPlaying, i
     }
   }, [isPlaying, activeAnimation, actions]);
 
-  // Optimized animation update
+  // Animation seeking
+  useEffect(() => {
+    if (activeAnimation && actions[activeAnimation] && mixer) {
+      const action = actions[activeAnimation];
+      if (action) {
+        action.time = animationProgress;
+        mixer.update(0); // Update mixer without advancing time
+      }
+    }
+  }, [animationProgress, activeAnimation, actions, mixer]);
+
+  // Optimized animation update with progress tracking
   useFrame((state, delta) => {
     if (mixer && !isLoading) {
-      mixer.update(delta);
+      if (isPlaying) {
+        mixer.update(delta);
+      }
+      
+      // Track animation progress
+      if (activeAnimation && actions[activeAnimation]) {
+        const action = actions[activeAnimation];
+        if (action && action.getClip()) {
+          const duration = action.getClip().duration;
+          const currentTime = action.time;
+          onAnimationProgress(currentTime, duration);
+        }
+      }
     }
   });
 
@@ -122,6 +149,9 @@ function Model({ url, fileType, onAnimationsFound, activeAnimation, isPlaying, i
   return (
     <group ref={group}>
       <primitive object={modelData.scene} />
+      {showSkeleton && modelData.scene && (
+        <skeletonHelper args={[modelData.scene]} />
+      )}
     </group>
   );
 }
@@ -138,6 +168,10 @@ export const ModelViewer = ({ modelUrl, fileType, onUpload, importedAnimations, 
   const [animations, setAnimations] = useState<string[]>([]);
   const [activeAnimation, setActiveAnimation] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [showSkeleton, setShowSkeleton] = useState(false);
+  const [animationProgress, setAnimationProgress] = useState(0);
+  const [animationDuration, setAnimationDuration] = useState(0);
+  const [renamedAnimations, setRenamedAnimations] = useState<Record<string, string>>({});
 
   // Reset animations when model changes
   useEffect(() => {
@@ -161,8 +195,29 @@ export const ModelViewer = ({ modelUrl, fileType, onUpload, importedAnimations, 
   }, []);
 
   const resetAnimation = useCallback(() => {
+    setAnimationProgress(0);
     setIsPlaying(false);
     setTimeout(() => setIsPlaying(true), 100);
+  }, []);
+
+  const onAnimationProgress = useCallback((progress: number, duration: number) => {
+    setAnimationProgress(progress);
+    setAnimationDuration(duration);
+  }, []);
+
+  const onSeekAnimation = useCallback((time: number) => {
+    setAnimationProgress(time);
+  }, []);
+
+  const onRenameAnimation = useCallback((oldName: string, newName: string) => {
+    setRenamedAnimations(prev => ({
+      ...prev,
+      [oldName]: newName
+    }));
+  }, []);
+
+  const onToggleSkeleton = useCallback(() => {
+    setShowSkeleton(prev => !prev);
   }, []);
 
   // Memoize camera settings for better performance
@@ -173,8 +228,8 @@ export const ModelViewer = ({ modelUrl, fileType, onUpload, importedAnimations, 
 
   return (
     <div className="w-full h-full flex flex-col">
-      {/* 3D Viewer */}
-      <div className="flex-1 relative bg-gradient-card rounded-xl shadow-card-custom border border-border overflow-hidden">
+      {/* 3D Viewer - Square aspect ratio */}
+      <div className="aspect-square relative bg-gradient-card rounded-xl shadow-card-custom border border-border overflow-hidden">
         {modelUrl && fileType ? (
           <>
             <Canvas
@@ -203,6 +258,10 @@ export const ModelViewer = ({ modelUrl, fileType, onUpload, importedAnimations, 
                 activeAnimation={activeAnimation}
                 isPlaying={isPlaying}
                 importedAnimations={importedAnimations}
+                showSkeleton={showSkeleton}
+                animationProgress={animationProgress}
+                onAnimationProgress={onAnimationProgress}
+                onSeekAnimation={onSeekAnimation}
                 onModelSceneReady={onModelSceneReady}
               />
               <OrbitControls
@@ -251,55 +310,23 @@ export const ModelViewer = ({ modelUrl, fileType, onUpload, importedAnimations, 
 
       {/* Animation Controls */}
       {modelUrl && animations.length > 0 && (
-        <Card className="mt-4 p-4 gradient-card border-border">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-foreground">
-              التحكم بالأنميشن ({animations.length})
-            </h3>
-            <div className="flex gap-2">
-              <Button
-                onClick={togglePlay}
-                variant="outline"
-                size="sm"
-                className="bg-primary/10 border-primary/20 text-primary"
-              >
-                {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-              </Button>
-              <Button
-                onClick={resetAnimation}
-                variant="outline"
-                size="sm"
-                className="bg-primary/10 border-primary/20 text-primary"
-              >
-                <RotateCcw className="w-4 h-4" />
-              </Button>
-            </div>
-          </div>
-          
-          <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
-            {animations.map((animName) => {
-              const isImported = importedAnimations.some(imported => imported.name === animName);
-              
-              return (
-                <Button
-                  key={animName}
-                  onClick={() => setActiveAnimation(animName)}
-                  variant={activeAnimation === animName ? "default" : "outline"}
-                  size="sm"
-                  className={activeAnimation === animName ? 
-                    "gradient-primary text-white shadow-glow" : 
-                    isImported ? 
-                      "bg-accent/20 border-accent/30 text-accent-foreground hover:bg-accent/30" :
-                      "bg-secondary/50 border-secondary text-secondary-foreground hover:bg-secondary"
-                  }
-                >
-                  {animName}
-                  {isImported && <span className="ml-1 text-xs opacity-70">M</span>}
-                </Button>
-              );
-            })}
-          </div>
-        </Card>
+        <div className="mt-4">
+          <AnimationControls
+            animations={animations}
+            activeAnimation={activeAnimation}
+            isPlaying={isPlaying}
+            importedAnimations={importedAnimations}
+            animationProgress={animationProgress}
+            animationDuration={animationDuration}
+            showSkeleton={showSkeleton}
+            onTogglePlay={togglePlay}
+            onResetAnimation={resetAnimation}
+            onSelectAnimation={setActiveAnimation}
+            onSeekAnimation={onSeekAnimation}
+            onRenameAnimation={onRenameAnimation}
+            onToggleSkeleton={onToggleSkeleton}
+          />
+        </div>
       )}
     </div>
   );

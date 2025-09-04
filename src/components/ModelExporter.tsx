@@ -42,75 +42,70 @@ export const ModelExporter = ({
       // Clone the scene to avoid modifying the original
       const sceneClone = modelScene.clone();
       
-      // Optimize the scene before export
-      sceneClone.traverse((child) => {
-        if (child instanceof THREE.Mesh) {
-          // Optimize geometry
-          if (child.geometry) {
-            child.geometry.computeBoundingBox();
-            child.geometry.computeBoundingSphere();
-          }
+      // Prepare all animations with proper naming
+      const exportAnimations = allAnimations.map((clip, index) => {
+        const clonedClip = clip.clone();
+        // Preserve animation names or use default naming
+        if (!clonedClip.name || clonedClip.name === '') {
+          clonedClip.name = `Animation_${index + 1}`;
         }
+        return clonedClip;
       });
       
       const options = {
         binary: format === 'glb',
-        animations: allAnimations,
+        animations: exportAnimations,
         includeCustomExtensions: true,
         truncateDrawRange: true,
         embedImages: true,
-        maxTextureSize: 1024, // Optimize texture size
+        maxTextureSize: 2048,
+        onlyVisible: false,
+        forceIndices: false,
+        forcePowerOfTwoTextures: false
       };
 
-      await new Promise<void>((resolve, reject) => {
+      const result = await new Promise<ArrayBuffer | any>((resolve, reject) => {
         exporter.parse(
           sceneClone,
-          (result) => {
-            try {
-              let blob: Blob;
-              let filename: string;
-              
-              if (format === 'glb') {
-                blob = new Blob([result as ArrayBuffer], { type: 'application/octet-stream' });
-                filename = `merged_model_${Date.now()}.glb`;
-              } else {
-                const jsonString = JSON.stringify(result, null, 2);
-                blob = new Blob([jsonString], { type: 'application/json' });
-                filename = `merged_model_${Date.now()}.gltf`;
-              }
-              
-              // Download file
-              const url = URL.createObjectURL(blob);
-              const link = document.createElement('a');
-              link.href = url;
-              link.download = filename;
-              link.style.display = 'none';
-              document.body.appendChild(link);
-              link.click();
-              document.body.removeChild(link);
-              
-              // Clean up
-              setTimeout(() => URL.revokeObjectURL(url), 1000);
-              
-              const animationCount = allAnimations.length;
-              const importedCount = importedAnimations.length;
-              const fileSize = (blob.size / (1024 * 1024)).toFixed(2);
-              
-              toast.success(`تم تصدير المودل بنجاح! (${animationCount} أنميشن، ${fileSize}MB)`);
-              resolve();
-            } catch (error) {
-              reject(error);
-            }
-          },
-          (error) => {
-            reject(error);
-          },
+          (gltf) => resolve(gltf),
+          (error) => reject(error),
           options
         );
       });
+
+      let blob: Blob;
+      let filename: string;
+      
+      if (format === 'glb') {
+        blob = new Blob([result as ArrayBuffer], { type: 'application/octet-stream' });
+        filename = `merged_model_${Date.now()}.glb`;
+      } else {
+        const jsonString = JSON.stringify(result, null, 2);
+        blob = new Blob([jsonString], { type: 'application/json' });
+        filename = `merged_model_${Date.now()}.gltf`;
+      }
+      
+      // Download file
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      // Clean up
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      
+      const animationCount = exportAnimations.length;
+      const importedCount = importedAnimations.length;
+      const fileSize = (blob.size / (1024 * 1024)).toFixed(2);
+      
+      toast.success(`تم تصدير المودل بنجاح! (${animationCount} أنميشن، ${fileSize}MB)`);
     } catch (error) {
       console.error('Export error:', error);
-      toast.error('خطأ في تصدير المودل');
+      toast.error('خطأ في تصدير المودل: ' + (error instanceof Error ? error.message : 'خطأ غير معروف'));
     } finally {
       setIsExporting(false);
     }
