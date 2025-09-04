@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { ModelViewer } from '@/components/ModelViewer';
 import { FileUpload } from '@/components/FileUpload';
 import { AnimationImporter } from '@/components/AnimationImporter';
 import { ModelExporter } from '@/components/ModelExporter';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Download, Github, Sparkles } from 'lucide-react';
+import { Download, Github, Sparkles, Info } from 'lucide-react';
+import { toast } from 'sonner';
 import * as THREE from 'three';
 
 interface ImportedAnimation {
@@ -17,42 +18,79 @@ interface ImportedAnimation {
 
 const Index = () => {
   const [modelUrl, setModelUrl] = useState<string | null>(null);
+  const [fileType, setFileType] = useState<'gltf' | 'glb' | 'fbx' | null>(null);
   const [showUpload, setShowUpload] = useState(false);
   const [importedAnimations, setImportedAnimations] = useState<ImportedAnimation[]>([]);
   const [modelScene, setModelScene] = useState<THREE.Object3D | null>(null);
   const [allAnimations, setAllAnimations] = useState<THREE.AnimationClip[]>([]);
 
-  const handleFileSelect = (url: string) => {
-    setModelUrl(url);
-    setShowUpload(false);
-  };
+  // Clean up URLs when component unmounts
+  useEffect(() => {
+    return () => {
+      if (modelUrl) {
+        URL.revokeObjectURL(modelUrl);
+      }
+      importedAnimations.forEach(anim => {
+        URL.revokeObjectURL(anim.url);
+      });
+    };
+  }, []);
 
-  const handleUpload = () => {
-    setShowUpload(true);
-  };
-
-  const clearModel = () => {
+  const handleFileSelect = useCallback((url: string, type: 'gltf' | 'glb' | 'fbx') => {
+    // Clean up previous model URL
     if (modelUrl) {
       URL.revokeObjectURL(modelUrl);
     }
-    setModelUrl(null);
+    
+    setModelUrl(url);
+    setFileType(type);
     setShowUpload(false);
-    setImportedAnimations([]); // Clear imported animations when clearing model
-  };
+    
+    // Clear previous data
+    setImportedAnimations([]);
+    setModelScene(null);
+    setAllAnimations([]);
+    
+    toast.success(`تم رفع ملف ${type.toUpperCase()} بنجاح!`);
+  }, [modelUrl]);
 
-  const handleAnimationImport = (animations: ImportedAnimation[]) => {
+  const handleUpload = useCallback(() => {
+    setShowUpload(true);
+  }, []);
+
+  const clearModel = useCallback(() => {
+    if (modelUrl) {
+      URL.revokeObjectURL(modelUrl);
+    }
+    
+    // Clean up imported animations
+    importedAnimations.forEach(anim => {
+      URL.revokeObjectURL(anim.url);
+    });
+    
+    setModelUrl(null);
+    setFileType(null);
+    setShowUpload(false);
+    setImportedAnimations([]);
+    setModelScene(null);
+    setAllAnimations([]);
+    
+    toast.success('تم مسح المودل والأنميشن');
+  }, [modelUrl, importedAnimations]);
+
+  const handleAnimationImport = useCallback((animations: ImportedAnimation[]) => {
     setImportedAnimations(animations);
-  };
+  }, []);
 
-  const handleModelSceneReady = (scene: THREE.Object3D, animations: THREE.AnimationClip[]) => {
+  const handleModelSceneReady = useCallback((scene: THREE.Object3D, animations: THREE.AnimationClip[]) => {
     setModelScene(scene);
     setAllAnimations(animations);
-  };
+  }, []);
 
   return (
     <div className="min-h-screen bg-gradient-secondary">
       {/* Header */}
-      <header className="border-b border-border/20 backdrop-blur-sm bg-background/80">
+      <header className="border-b border-border/20 backdrop-blur-sm bg-background/80 sticky top-0 z-50">
         <div className="container mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -64,7 +102,7 @@ const Index = () => {
                   عارض المودلز ثلاثي الأبعاد
                 </h1>
                 <p className="text-sm text-muted-foreground">
-                  ارفع وشاهد مودلز ثلاثية الأبعاد مع الأنميشن
+                  ارفع وشاهد مودلز ثلاثية الأبعاد مع الأنميشن - دعم GLB, GLTF, FBX
                 </p>
               </div>
             </div>
@@ -84,6 +122,7 @@ const Index = () => {
                 variant="outline" 
                 size="sm"
                 className="bg-primary/10 border-primary/20 text-primary hover:bg-primary/20"
+                onClick={() => window.open('https://github.com', '_blank')}
               >
                 <Github className="w-4 h-4 mr-2" />
                 المصدر
@@ -98,7 +137,7 @@ const Index = () => {
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 h-[calc(100vh-200px)]">
           {/* File Upload Panel */}
           <div className="lg:col-span-1">
-            <div className="space-y-6 h-full">
+            <div className="space-y-6 h-full overflow-y-auto">
               <Card className="gradient-card border-border shadow-card-custom">
                 <div className="p-6">
                   <h2 className="text-xl font-semibold text-foreground mb-4 flex items-center gap-2">
@@ -116,7 +155,10 @@ const Index = () => {
                       <div className="w-16 h-16 mx-auto mb-3 rounded-full gradient-hero flex items-center justify-center">
                         <Sparkles className="w-8 h-8 text-white" />
                       </div>
-                      <p className="text-foreground font-medium mb-2">المودل محمل بنجاح!</p>
+                      <p className="text-foreground font-medium mb-1">المودل محمل بنجاح!</p>
+                      <p className="text-xs text-muted-foreground mb-3">
+                        نوع الملف: {fileType?.toUpperCase()}
+                      </p>
                       <Button 
                         onClick={() => setShowUpload(true)}
                         variant="outline"
@@ -130,12 +172,16 @@ const Index = () => {
                   
                   <div className="space-y-4 text-sm text-muted-foreground">
                     <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
-                      <h3 className="font-medium text-foreground mb-2">الميزات المدعومة:</h3>
+                      <h3 className="font-medium text-foreground mb-2 flex items-center gap-2">
+                        <Info className="w-4 h-4" />
+                        الميزات المدعومة:
+                      </h3>
                       <ul className="space-y-1">
-                        <li>• ملفات GLB و GLTF</li>
+                        <li>• ملفات GLB و GLTF و FBX</li>
                         <li>• الأنميشن المتعددة</li>
-                        <li>• التحكم التفاعلي</li>
-                        <li>• إضافة أنميشن Mixamo</li>
+                        <li>• التحكم التفاعلي المحسن</li>
+                        <li>• إضافة أنميشن خارجية</li>
+                        <li>• تصدير مع الأنميشن المدمجة</li>
                       </ul>
                     </div>
                     
@@ -145,6 +191,7 @@ const Index = () => {
                         <li>• اسحب لتدوير المودل</li>
                         <li>• اسكرول للتكبير/التصغير</li>
                         <li>• انقر على أسماء الأنميشن للتبديل</li>
+                        <li>• استخدم Ctrl+اسحب للتحريك</li>
                       </ul>
                     </div>
                   </div>
@@ -174,7 +221,8 @@ const Index = () => {
           {/* 3D Viewer */}
           <div className="lg:col-span-3">
             <ModelViewer 
-              modelUrl={modelUrl} 
+              modelUrl={modelUrl}
+              fileType={fileType}
               onUpload={handleUpload}
               importedAnimations={importedAnimations}
               onModelSceneReady={handleModelSceneReady}

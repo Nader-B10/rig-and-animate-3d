@@ -1,7 +1,8 @@
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, useGLTF, useAnimations, Environment, ContactShadows } from '@react-three/drei';
 import * as THREE from 'three';
+import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 import { Button } from '@/components/ui/button';
 import { Play, Pause, RotateCcw, Upload } from 'lucide-react';
 import { Card } from '@/components/ui/card';
@@ -16,6 +17,7 @@ interface ImportedAnimation {
 
 interface ModelProps {
   url: string;
+  fileType: 'gltf' | 'glb' | 'fbx';
   onAnimationsFound: (animations: string[]) => void;
   activeAnimation: string | null;
   isPlaying: boolean;
@@ -23,49 +25,109 @@ interface ModelProps {
   onModelSceneReady?: (scene: THREE.Object3D, animations: THREE.AnimationClip[]) => void;
 }
 
-function Model({ url, onAnimationsFound, activeAnimation, isPlaying, importedAnimations, onModelSceneReady }: ModelProps) {
+function Model({ url, fileType, onAnimationsFound, activeAnimation, isPlaying, importedAnimations, onModelSceneReady }: ModelProps) {
   const group = useRef<THREE.Group>(null);
-  const { scene, animations } = useGLTF(url);
+  const [modelData, setModelData] = useState<{ scene: THREE.Object3D; animations: THREE.AnimationClip[] } | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [hasNotified, setHasNotified] = useState(false);
   
-  // Combine original animations with imported ones
-  const allAnimationClips = [...animations];
-  importedAnimations.forEach(imported => {
-    // Create a copy of the clip to avoid conflicts
-    const clonedClip = imported.clip.clone();
-    clonedClip.name = imported.name;
-    allAnimationClips.push(clonedClip);
-  });
+  // Load model based on file type
+  useEffect(() => {
+    let isCancelled = false;
+    setIsLoading(true);
+    setHasNotified(false);
+    
+    const loadModel = async () => {
+      try {
+        if (fileType === 'fbx') {
+          const loader = new FBXLoader();
+          loader.load(url, (fbx) => {
+            if (isCancelled) return;
+            
+            // Scale FBX models appropriately
+            fbx.scale.setScalar(0.01);
+            
+            setModelData({
+              scene: fbx,
+              animations: fbx.animations || []
+            });
+            setIsLoading(false);
+          }, undefined, (error) => {
+            if (isCancelled) return;
+            console.error('Error loading FBX:', error);
+            toast.error('خطأ في تحميل ملف FBX');
+            setIsLoading(false);
+          });
+        } else {
+          // Use useGLTF for GLTF/GLB files
+          const { scene, animations } = useGLTF(url);
+          if (isCancelled) return;
+          
+          setModelData({ scene, animations });
+          setIsLoading(false);
+        }
+      } catch (error) {
+        if (isCancelled) return;
+        console.error('Error loading model:', error);
+        toast.error('خطأ في تحميل المودل');
+        setIsLoading(false);
+      }
+    };
+
+    loadModel();
+    
+    return () => {
+      isCancelled = true;
+    };
+  }, [url, fileType]);
+  
+  // Combine animations with imported ones
+  const allAnimationClips = useMemo(() => {
+    if (!modelData) return [];
+    
+    const clips = [...modelData.animations];
+    importedAnimations.forEach(imported => {
+      const clonedClip = imported.clip.clone();
+      clonedClip.name = imported.name;
+      clips.push(clonedClip);
+    });
+    
+    return clips;
+  }, [modelData?.animations, importedAnimations]);
   
   const { actions, mixer } = useAnimations(allAnimationClips, group);
   
+  // Notify about animations found (only once)
   useEffect(() => {
+    if (!modelData || hasNotified) return;
+    
     const totalAnimations = allAnimationClips.length;
     if (totalAnimations > 0) {
       const animNames = allAnimationClips.map(anim => anim.name);
       onAnimationsFound(animNames);
       
-      // Notify parent about scene and animations for exporting
       if (onModelSceneReady) {
-        onModelSceneReady(scene, allAnimationClips);
+        onModelSceneReady(modelData.scene, allAnimationClips);
       }
       
-      const originalCount = animations.length;
+      const originalCount = modelData.animations.length;
       const importedCount = importedAnimations.length;
       
       if (importedCount > 0) {
         toast.success(`المودل: ${originalCount} أنميشن، Mixamo: ${importedCount} أنميشن`);
-      } else {
+      } else if (originalCount > 0) {
         toast.success(`تم العثور على ${originalCount} انميشن!`);
       }
+      
+      setHasNotified(true);
     }
-  }, [allAnimationClips, onAnimationsFound, animations.length, importedAnimations.length, scene, onModelSceneReady]);
+  }, [modelData, allAnimationClips, onAnimationsFound, onModelSceneReady, importedAnimations.length, hasNotified]);
 
+  // Handle animation playback
   useEffect(() => {
     if (activeAnimation && actions[activeAnimation]) {
-      // Stop all animations
       Object.values(actions).forEach(action => action?.stop());
       
-      // Play selected animation
       const action = actions[activeAnimation];
       if (action) {
         action.reset().play();
@@ -83,67 +145,104 @@ function Model({ url, onAnimationsFound, activeAnimation, isPlaying, importedAni
     }
   }, [isPlaying, activeAnimation, actions]);
 
+  // Optimized animation update
   useFrame((state, delta) => {
-    if (mixer) mixer.update(delta);
+    if (mixer && !isLoading) {
+      mixer.update(delta);
+    }
   });
+
+  if (isLoading || !modelData) {
+    return (
+      <group>
+        <mesh>
+          <boxGeometry args={[1, 1, 1]} />
+          <meshStandardMaterial color="#666" wireframe />
+        </mesh>
+      </group>
+    );
+  }
 
   return (
     <group ref={group}>
-      <primitive object={scene} />
+      <primitive object={modelData.scene} />
     </group>
   );
 }
 
 interface ModelViewerProps {
   modelUrl: string | null;
+  fileType: 'gltf' | 'glb' | 'fbx' | null;
   onUpload: () => void;
   importedAnimations: ImportedAnimation[];
   onModelSceneReady?: (scene: THREE.Object3D, animations: THREE.AnimationClip[]) => void;
 }
 
-export const ModelViewer = ({ modelUrl, onUpload, importedAnimations, onModelSceneReady }: ModelViewerProps) => {
+export const ModelViewer = ({ modelUrl, fileType, onUpload, importedAnimations, onModelSceneReady }: ModelViewerProps) => {
   const [animations, setAnimations] = useState<string[]>([]);
   const [activeAnimation, setActiveAnimation] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
 
-  const handleAnimationsFound = (animNames: string[]) => {
+  // Reset animations when model changes
+  useEffect(() => {
+    if (!modelUrl) {
+      setAnimations([]);
+      setActiveAnimation(null);
+      setIsPlaying(false);
+    }
+  }, [modelUrl]);
+
+  const handleAnimationsFound = useCallback((animNames: string[]) => {
     setAnimations(animNames);
-    if (animNames.length > 0) {
+    if (animNames.length > 0 && !activeAnimation) {
       setActiveAnimation(animNames[0]);
       setIsPlaying(true);
     }
-  };
+  }, [activeAnimation]);
 
-  const togglePlay = () => {
-    setIsPlaying(!isPlaying);
-  };
+  const togglePlay = useCallback(() => {
+    setIsPlaying(prev => !prev);
+  }, []);
 
-  const resetAnimation = () => {
+  const resetAnimation = useCallback(() => {
     setIsPlaying(false);
     setTimeout(() => setIsPlaying(true), 100);
-  };
+  }, []);
+
+  // Memoize camera settings for better performance
+  const cameraSettings = useMemo(() => ({
+    position: [5, 5, 5] as [number, number, number],
+    fov: 50
+  }), []);
 
   return (
     <div className="w-full h-full flex flex-col">
       {/* 3D Viewer */}
       <div className="flex-1 relative bg-gradient-card rounded-xl shadow-card-custom border border-border overflow-hidden">
-        {modelUrl ? (
+        {modelUrl && fileType ? (
           <>
             <Canvas
               shadows
-              camera={{ position: [5, 5, 5], fov: 50 }}
+              camera={cameraSettings}
               className="w-full h-full"
+              gl={{ 
+                antialias: true,
+                alpha: true,
+                powerPreference: "high-performance"
+              }}
+              performance={{ min: 0.5 }}
             >
               <ambientLight intensity={0.5} />
               <directionalLight
                 position={[10, 10, 5]}
                 intensity={1}
                 castShadow
-                shadow-mapSize-width={2048}
-                shadow-mapSize-height={2048}
+                shadow-mapSize-width={1024}
+                shadow-mapSize-height={1024}
               />
               <Model
                 url={modelUrl}
+                fileType={fileType}
                 onAnimationsFound={handleAnimationsFound}
                 activeAnimation={activeAnimation}
                 isPlaying={isPlaying}
@@ -156,6 +255,8 @@ export const ModelViewer = ({ modelUrl, onUpload, importedAnimations, onModelSce
                 enableRotate={true}
                 minDistance={2}
                 maxDistance={20}
+                enableDamping={true}
+                dampingFactor={0.05}
               />
               <Environment preset="studio" />
               <ContactShadows
@@ -167,7 +268,6 @@ export const ModelViewer = ({ modelUrl, onUpload, importedAnimations, onModelSce
               />
             </Canvas>
             
-            {/* Loading overlay */}
             <div className="absolute top-4 left-4 bg-black/20 backdrop-blur-sm rounded-lg px-3 py-2">
               <p className="text-white text-sm">العارض ثلاثي الأبعاد</p>
             </div>
@@ -182,7 +282,7 @@ export const ModelViewer = ({ modelUrl, onUpload, importedAnimations, onModelSce
                 ارفع مودل ثلاثي الأبعاد
               </h3>
               <p className="text-muted-foreground mb-4">
-                ادعم ملفات GLB و GLTF مع الأنميشن
+                ادعم ملفات GLB و GLTF و FBX مع الأنميشن
               </p>
               <Button onClick={onUpload} className="gradient-primary text-white shadow-glow">
                 <Upload className="w-4 h-4 mr-2" />
@@ -198,7 +298,7 @@ export const ModelViewer = ({ modelUrl, onUpload, importedAnimations, onModelSce
         <Card className="mt-4 p-4 gradient-card border-border">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-foreground">
-              التحكم بالأنميشن
+              التحكم بالأنميشن ({animations.length})
             </h3>
             <div className="flex gap-2">
               <Button
@@ -220,9 +320,8 @@ export const ModelViewer = ({ modelUrl, onUpload, importedAnimations, onModelSce
             </div>
           </div>
           
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
             {animations.map((animName) => {
-              // Check if this is an imported animation
               const isImported = importedAnimations.some(imported => imported.name === animName);
               
               return (

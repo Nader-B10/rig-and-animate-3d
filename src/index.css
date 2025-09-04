@@ -117,6 +117,28 @@ All colors MUST be HSL.
     @apply bg-background text-foreground;
     background: var(--gradient-secondary);
     min-height: 100vh;
+    font-feature-settings: "liga" 1, "kern" 1;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  /* Performance optimizations */
+  * {
+    box-sizing: border-box;
+  }
+  
+  /* Optimize animations for better performance */
+  .animate-spin,
+  .animate-pulse,
+  .animate-float,
+  .animate-pulse-glow {
+    will-change: transform;
+  }
+  
+  /* Improve scrolling performance */
+  .overflow-y-auto {
+    -webkit-overflow-scrolling: touch;
   }
 }
 

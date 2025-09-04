@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/card';
 import { toast } from 'sonner';
 
 interface FileUploadProps {
-  onFileSelect: (url: string) => void;
+  onFileSelect: (url: string, fileType: 'gltf' | 'glb' | 'fbx') => void;
   className?: string;
   multiple?: boolean;
 }
@@ -15,20 +15,23 @@ export const FileUpload = ({ onFileSelect, className, multiple = false }: FileUp
   const onDrop = useCallback((acceptedFiles: File[]) => {
     if (!acceptedFiles.length) return;
 
-    // Process files
     acceptedFiles.forEach((file) => {
-      // Validate file type
-      const validTypes = ['.gltf', '.glb'];
       const fileExtension = file.name.toLowerCase().split('.').pop();
       
-      if (!fileExtension || !validTypes.includes(`.${fileExtension}`)) {
-        toast.error(`نوع الملف غير مدعوم: ${file.name}. يرجى رفع ملف GLB أو GLTF`);
+      if (!fileExtension || !['gltf', 'glb', 'fbx'].includes(fileExtension)) {
+        toast.error(`نوع الملف غير مدعوم: ${file.name}. يرجى رفع ملف GLB أو GLTF أو FBX`);
         return;
       }
 
-      // Create object URL for the file
+      // Check file size (max 100MB)
+      if (file.size > 100 * 1024 * 1024) {
+        toast.error(`الملف كبير جداً: ${file.name}. الحد الأقصى 100MB`);
+        return;
+      }
+
       const url = URL.createObjectURL(file);
-      onFileSelect(url);
+      const fileType = fileExtension as 'gltf' | 'glb' | 'fbx';
+      onFileSelect(url, fileType);
     });
     
     toast.success(`تم رفع ${acceptedFiles.length} ملف${acceptedFiles.length > 1 ? '' : ''}`);
@@ -39,8 +42,10 @@ export const FileUpload = ({ onFileSelect, className, multiple = false }: FileUp
     accept: {
       'model/gltf-binary': ['.glb'],
       'model/gltf+json': ['.gltf'],
+      'application/octet-stream': ['.fbx'],
     },
     multiple: multiple,
+    maxSize: 100 * 1024 * 1024, // 100MB
   });
 
   return (
@@ -81,8 +86,8 @@ export const FileUpload = ({ onFileSelect, className, multiple = false }: FileUp
           {isDragReject 
             ? 'نوع الملف غير مدعوم'
             : multiple
-            ? 'اسحب وأفلت ملفات GLB أو GLTF هنا، أو انقر للاختيار (يمكن اختيار عدة ملفات)'
-            : 'اسحب وأفلت ملف GLB أو GLTF هنا، أو انقر للاختيار'
+            ? 'اسحب وأفلت ملفات GLB أو GLTF أو FBX هنا، أو انقر للاختيار (يمكن اختيار عدة ملفات)'
+            : 'اسحب وأفلت ملف GLB أو GLTF أو FBX هنا، أو انقر للاختيار'
           }
         </p>
         
@@ -98,8 +103,8 @@ export const FileUpload = ({ onFileSelect, className, multiple = false }: FileUp
         )}
         
         <div className="mt-4 text-xs text-muted-foreground">
-          <p>الأنواع المدعومة: GLB, GLTF</p>
-          <p>الحد الأقصى: 50MB</p>
+          <p>الأنواع المدعومة: GLB, GLTF, FBX</p>
+          <p>الحد الأقصى: 100MB</p>
         </div>
       </div>
     </Card>
