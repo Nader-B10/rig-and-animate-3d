@@ -2,8 +2,9 @@ import { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, useAnimations, Environment, ContactShadows } from '@react-three/drei';
 import * as THREE from 'three';
-import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { useModelLoader } from '@/hooks/useModelLoader';
+import { useAnimationRegistry } from '@/hooks/useAnimationRegistry';
+import { useSkeletonHelper } from '@/hooks/useSkeletonHelper';
 import { AnimationControls } from '@/components/AnimationControls';
 import { Button } from '@/components/ui/button';
 import { Upload } from 'lucide-react';
@@ -14,6 +15,7 @@ interface ImportedAnimation {
   name: string;
   url: string;
   clip: THREE.AnimationClip;
+  sourceRoot?: THREE.Object3D | null;
 }
 
 interface ModelProps {
@@ -33,7 +35,9 @@ interface ModelProps {
 function Model({ url, fileType, onAnimationsFound, activeAnimation, isPlaying, importedAnimations, showSkeleton, animationProgress, onAnimationProgress, onSeekAnimation, onModelSceneReady }: ModelProps) {
   const group = useRef<THREE.Group>(null);
   const { modelData, isLoading, error } = useModelLoader(url, fileType);
+  const animationRegistry = useAnimationRegistry();
   const [hasNotified, setHasNotified] = useState(false);
+  const [targetSkeleton, setTargetSkeleton] = useState<THREE.Skeleton | null>(null);
   
   useEffect(() => {
     if (error) {
@@ -41,31 +45,48 @@ function Model({ url, fileType, onAnimationsFound, activeAnimation, isPlaying, i
       toast.error('خطأ في تحميل المودل');
     }
   }, [error]);
-  
-  // Combine animations with imported ones
-  const allAnimationClips = useMemo(() => {
-    if (!modelData) return [];
-    
-    const clips = [...modelData.animations];
-    importedAnimations.forEach(imported => {
-      const clonedClip = imported.clip.clone();
-      clonedClip.name = imported.name;
-      clips.push(clonedClip);
+
+  // Extract skeleton from loaded model
+  useEffect(() => {
+    if (!modelData) {
+      setTargetSkeleton(null);
+      return;
+    }
+
+    let skeleton: THREE.Skeleton | null = null;
+    modelData.scene.traverse((child) => {
+      if (child instanceof THREE.SkinnedMesh && child.skeleton && !skeleton) {
+        skeleton = child.skeleton;
+      }
     });
     
-    return clips;
-  }, [modelData?.animations, importedAnimations]);
-  
+    setTargetSkeleton(skeleton);
+  }, [modelData]);
+
+  // Initialize animations when model loads
+  useEffect(() => {
+    if (!modelData) return;
+    
+    // Add original animations to registry
+    animationRegistry.addOriginalAnimations(modelData.animations);
+  }, [modelData, animationRegistry]);
+
+  // Add imported animations when they change
+  useEffect(() => {
+    animationRegistry.addImportedAnimations(importedAnimations, targetSkeleton);
+  }, [importedAnimations, targetSkeleton, animationRegistry]);
+
+  // Get all clips from registry
+  const allAnimationClips = animationRegistry.getAllClips();
   const { actions, mixer } = useAnimations(allAnimationClips, group);
   
-  // Notify about animations found (only once)
+  // Notify about animations found (only once per model change)
   useEffect(() => {
     if (!modelData || hasNotified) return;
     
-    const totalAnimations = allAnimationClips.length;
-    if (totalAnimations > 0) {
-      const animNames = allAnimationClips.map(anim => anim.name);
-      onAnimationsFound(animNames);
+    const animationNames = animationRegistry.getAnimationNames();
+    if (animationNames.length > 0) {
+      onAnimationsFound(animationNames);
       
       if (onModelSceneReady) {
         onModelSceneReady(modelData.scene, allAnimationClips);
@@ -82,7 +103,15 @@ function Model({ url, fileType, onAnimationsFound, activeAnimation, isPlaying, i
       
       setHasNotified(true);
     }
-  }, [modelData, allAnimationClips, onAnimationsFound, onModelSceneReady, importedAnimations.length, hasNotified]);
+  }, [modelData, animationRegistry, onAnimationsFound, onModelSceneReady, importedAnimations.length, hasNotified, allAnimationClips]);
+
+  // Update animation list when registry changes
+  useEffect(() => {
+    const animationNames = animationRegistry.getAnimationNames();
+    if (animationNames.length > 0) {
+      onAnimationsFound(animationNames);
+    }
+  }, [animationRegistry.items, onAnimationsFound]);
 
   // Handle animation playback
   useEffect(() => {
@@ -147,12 +176,13 @@ function Model({ url, fileType, onAnimationsFound, activeAnimation, isPlaying, i
     );
   }
 
+  // Create skeleton helper
+  const skeletonHelper = useSkeletonHelper(modelData?.scene || null, showSkeleton);
+
   return (
     <group ref={group}>
       <primitive object={modelData.scene} />
-      {showSkeleton && modelData.scene && (
-        <skeletonHelper args={[modelData.scene]} />
-      )}
+      {skeletonHelper && <primitive object={skeletonHelper} />}
     </group>
   );
 }
@@ -172,7 +202,7 @@ export const ModelViewer = ({ modelUrl, fileType, onUpload, importedAnimations, 
   const [showSkeleton, setShowSkeleton] = useState(false);
   const [animationProgress, setAnimationProgress] = useState(0);
   const [animationDuration, setAnimationDuration] = useState(0);
-  const [renamedAnimations, setRenamedAnimations] = useState<Record<string, string>>({});
+  const animationRegistry = useAnimationRegistry();
 
   // Reset animations when model changes
   useEffect(() => {
@@ -180,8 +210,9 @@ export const ModelViewer = ({ modelUrl, fileType, onUpload, importedAnimations, 
       setAnimations([]);
       setActiveAnimation(null);
       setIsPlaying(false);
+      animationRegistry.clear();
     }
-  }, [modelUrl]);
+  }, [modelUrl, animationRegistry]);
 
   const handleAnimationsFound = useCallback((animNames: string[]) => {
     setAnimations(animNames);
@@ -211,11 +242,16 @@ export const ModelViewer = ({ modelUrl, fileType, onUpload, importedAnimations, 
   }, []);
 
   const onRenameAnimation = useCallback((oldName: string, newName: string) => {
-    setRenamedAnimations(prev => ({
-      ...prev,
-      [oldName]: newName
-    }));
-  }, []);
+    const item = animationRegistry.items.find(item => item.name === oldName);
+    if (item && animationRegistry.renameAnimation(item.id, newName)) {
+      // Update active animation if it was renamed
+      if (activeAnimation === oldName) {
+        setActiveAnimation(newName);
+      }
+      // Update animations list
+      setAnimations(prev => prev.map(name => name === oldName ? newName : name));
+    }
+  }, [animationRegistry, activeAnimation]);
 
   const onToggleSkeleton = useCallback(() => {
     setShowSkeleton(prev => !prev);

@@ -24,6 +24,7 @@ interface ImportedAnimation {
   name: string;
   url: string;
   clip: THREE.AnimationClip;
+  sourceRoot?: THREE.Object3D | null;
 }
 
 interface AnimationControlsProps {

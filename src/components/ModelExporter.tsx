@@ -11,6 +11,7 @@ interface ImportedAnimation {
   name: string;
   url: string;
   clip: THREE.AnimationClip;
+  sourceRoot?: THREE.Object3D | null;
 }
 
 interface ModelExporterProps {
@@ -42,13 +43,17 @@ export const ModelExporter = ({
       // Clone the scene to avoid modifying the original
       const sceneClone = modelScene.clone();
       
-      // Prepare all animations with proper naming
+      // Prepare all animations with proper naming and ensure they're properly formatted
       const exportAnimations = allAnimations.map((clip, index) => {
         const clonedClip = clip.clone();
-        // Preserve animation names or use default naming
+        // Ensure animation has a valid name
         if (!clonedClip.name || clonedClip.name === '') {
           clonedClip.name = `Animation_${index + 1}`;
         }
+        // Validate animation tracks
+        clonedClip.tracks = clonedClip.tracks.filter(track => 
+          track && track.name && track.times && track.values
+        );
         return clonedClip;
       });
       
@@ -67,8 +72,8 @@ export const ModelExporter = ({
       const result = await new Promise<ArrayBuffer | any>((resolve, reject) => {
         exporter.parse(
           sceneClone,
-          (gltf) => resolve(gltf),
-          (error) => reject(error),
+          resolve,
+          reject,
           options
         );
       });
@@ -100,9 +105,10 @@ export const ModelExporter = ({
       
       const animationCount = exportAnimations.length;
       const importedCount = importedAnimations.length;
+      const originalCount = animationCount - importedCount;
       const fileSize = (blob.size / (1024 * 1024)).toFixed(2);
       
-      toast.success(`تم تصدير المودل بنجاح! (${animationCount} أنميشن، ${fileSize}MB)`);
+      toast.success(`تم تصدير المودل بنجاح! (${originalCount} أصلية + ${importedCount} مستوردة، ${fileSize}MB)`);
     } catch (error) {
       console.error('Export error:', error);
       toast.error('خطأ في تصدير المودل: ' + (error instanceof Error ? error.message : 'خطأ غير معروف'));
@@ -116,6 +122,7 @@ export const ModelExporter = ({
   }
 
   const originalCount = allAnimations.length - importedAnimations.length;
+  const hasImportedAnimations = importedAnimations.length > 0;
 
   return (
     <Card className="gradient-card border-border shadow-card-custom">
@@ -138,10 +145,11 @@ export const ModelExporter = ({
           <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
             <p className="text-sm text-foreground mb-2">معلومات المودل:</p>
             <ul className="text-xs text-muted-foreground space-y-1">
-              <li>• إجمالي الأنميشن: {allAnimations.length}</li>
-              <li>• أنميشن أصلية: {originalCount}</li>
-              <li>• أنميشن مستوردة: {importedAnimations.length}</li>
-              <li>• سيتم تصدير جميع الأنميشن مدمجة</li>
+              <li>• إجمالي الأنميشن: <span className="font-semibold text-primary">{allAnimations.length}</span></li>
+              <li>• أنميشن أصلية: <span className="font-semibold text-secondary-foreground">{originalCount}</span></li>
+              <li>• أنميشن مستوردة: <span className="font-semibold text-accent-foreground">{importedAnimations.length}</span></li>
+              <li>• سيتم تصدير جميع الأنميشن مدمجة مع الأسماء المحدثة</li>
+              {hasImportedAnimations && <li>• تم دمج أنميشن Mixamo مع السكيلتون الأصلي</li>}
             </ul>
           </div>
 
@@ -178,6 +186,7 @@ export const ModelExporter = ({
 
           <div className="text-xs text-muted-foreground text-center mt-3">
             <p>GLB: ملف واحد مضغوط | GLTF: ملف JSON مع الموارد</p>
+            <p className="text-accent-foreground mt-1">يحتوي على retargeted animations للسكيلتون الأصلي</p>
             {isExporting && <p className="text-primary mt-1">جاري التصدير...</p>}
           </div>
         </div>
