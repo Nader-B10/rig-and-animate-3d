@@ -2,6 +2,7 @@ import { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, useAnimations, Environment, ContactShadows } from '@react-three/drei';
 import * as THREE from 'three';
+import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { useModelLoader } from '@/hooks/useModelLoader';
 import { AnimationControls } from '@/components/AnimationControls';
 import { Button } from '@/components/ui/button';

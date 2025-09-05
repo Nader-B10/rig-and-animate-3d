@@ -13,6 +13,7 @@ interface ImportedAnimation {
   name: string;
   url: string;
   clip: THREE.AnimationClip;
+  sourceRoot?: THREE.Object3D | null;
 }
 
 interface AnimationImporterProps {
@@ -29,12 +30,14 @@ export const AnimationImporter = ({ onAnimationImport, importedAnimations }: Ani
     
     try {
       let animations: THREE.AnimationClip[] = [];
+      let sourceRoot: THREE.Object3D | null = null;
       
       if (fileType === 'fbx') {
         const loader = new FBXLoader();
         
         await new Promise<void>((resolve, reject) => {
           loader.load(url, (fbx) => {
+            sourceRoot = fbx;
             if (fbx.animations && fbx.animations.length > 0) {
               animations = fbx.animations;
               resolve();
@@ -48,6 +51,7 @@ export const AnimationImporter = ({ onAnimationImport, importedAnimations }: Ani
         
         await new Promise<void>((resolve, reject) => {
           loader.load(url, (gltf) => {
+            sourceRoot = gltf.scene;
             if (gltf.animations && gltf.animations.length > 0) {
               animations = gltf.animations;
               resolve();
@@ -63,7 +67,8 @@ export const AnimationImporter = ({ onAnimationImport, importedAnimations }: Ani
           id: `imported_${Date.now()}_${index}`,
           name: clip.name || `${fileType.toUpperCase()} Animation ${index + 1}`,
           url,
-          clip: clip.clone() // Clone to avoid conflicts
+          clip: clip.clone(), // Clone to avoid conflicts
+          sourceRoot
         }));
         
         const updatedAnimations = [...importedAnimations, ...newAnimations];
