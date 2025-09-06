@@ -200,7 +200,7 @@ export function useAnimationRegistry(): AnimationRegistry {
     setRegistryItems([]);
   }, []);
 
-  return useMemo(() => ({
+  return {
     items: registryItems,
     addOriginalAnimations,
     addImportedAnimations,
@@ -209,14 +209,5 @@ export function useAnimationRegistry(): AnimationRegistry {
     getAnimationNames,
     removeImportedAnimations,
     clear
-  }), [
-    registryItems,
-    addOriginalAnimations,
-    addImportedAnimations,
-    renameAnimation,
-    getAllClips,
-    getAnimationNames,
-    removeImportedAnimations,
-    clear
-  ]);
+  };
 }
