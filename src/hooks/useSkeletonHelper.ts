@@ -5,26 +5,50 @@ export function useSkeletonHelper(scene: THREE.Object3D | null, visible: boolean
   const skeletonHelper = useMemo(() => {
     if (!scene || !visible) return null;
 
-    // Find the first SkinnedMesh with a skeleton
+    // Enhanced skeleton detection - check all possible SkinnedMesh locations
     let targetMesh: THREE.SkinnedMesh | null = null;
+    let allSkinnedMeshes: THREE.SkinnedMesh[] = [];
     
     scene.traverse((child) => {
-      if (child instanceof THREE.SkinnedMesh && child.skeleton && !targetMesh) {
-        targetMesh = child;
+      if (child instanceof THREE.SkinnedMesh && child.skeleton) {
+        allSkinnedMeshes.push(child);
+        if (!targetMesh) {
+          targetMesh = child;
+        }
       }
     });
 
+    // If no SkinnedMesh found, create a debug log
+    if (allSkinnedMeshes.length === 0) {
+      console.log('No SkinnedMesh found in scene for skeleton helper');
+      return null;
+    }
+
+    // Select the mesh with the most bones (usually the main character)
+    if (allSkinnedMeshes.length > 1) {
+      targetMesh = allSkinnedMeshes.reduce((prev, current) => 
+        (current.skeleton.bones.length > prev.skeleton.bones.length) ? current : prev
+      );
+    }
+
     if (!targetMesh || !targetMesh.skeleton) {
+      console.warn('No valid skeleton found for helper');
       return null;
     }
 
     try {
       const helper = new THREE.SkeletonHelper(targetMesh);
       if (helper.material instanceof THREE.LineBasicMaterial) {
-        helper.material.linewidth = 2;
-        helper.material.color.setHex(0x00ff00);
+        helper.material.linewidth = 3; // Increased line width for better visibility
+        helper.material.color.setHex(0x00ff88); // Brighter green
+        helper.material.opacity = 0.9;
+        helper.material.transparent = true;
+        helper.material.depthTest = false; // Always on top
       }
       helper.visible = visible;
+      helper.name = 'SkeletonHelper';
+      
+      console.log(`Skeleton helper created with ${targetMesh.skeleton.bones.length} bones`);
       return helper;
     } catch (error) {
       console.warn('Failed to create skeleton helper:', error);

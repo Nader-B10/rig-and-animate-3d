@@ -57,47 +57,54 @@ export function useAnimationRegistry(): AnimationRegistry {
     }
 
     try {
-      // Find source skeleton
+      // Find source skeleton with enhanced detection
       let sourceSkeleton: THREE.Skeleton | null = null;
+      let sourceSkinnedMesh: THREE.SkinnedMesh | null = null;
+      
       sourceRoot.traverse((child) => {
-        if (child instanceof THREE.SkinnedMesh && child.skeleton) {
+        if (child instanceof THREE.SkinnedMesh && child.skeleton && !sourceSkeleton) {
           sourceSkeleton = child.skeleton;
+          sourceSkinnedMesh = child;
         }
       });
 
-      if (!sourceSkeleton) {
+      if (!sourceSkeleton || !sourceSkinnedMesh) {
         console.warn('No source skeleton found, using original clip');
         return sourceClip.clone();
       }
 
-      // Create bone mapping between source and target
+      // Preserve original model orientation by ensuring consistent coordinate systems
+      const originalRotation = sourceSkinnedMesh.rotation.clone();
+      const originalScale = sourceSkinnedMesh.scale.clone();
+      
+      // Create enhanced bone mapping with coordinate system preservation
       const boneMapping: Record<string, string> = {};
       
-      // Common bone name mappings (Mixamo to standard rigs)
+      // Enhanced bone name mappings with more variations
       const commonMappings: Record<string, string[]> = {
-        'Hips': ['mixamorig:Hips', 'Hips', 'Hip'],
-        'Spine': ['mixamorig:Spine', 'Spine', 'Spine1'],
-        'Spine1': ['mixamorig:Spine1', 'Spine1', 'Spine2'],
-        'Spine2': ['mixamorig:Spine2', 'Spine2', 'Spine3'],
+        'Hips': ['mixamorig:Hips', 'Hips', 'Hip', 'Root', 'Pelvis'],
+        'Spine': ['mixamorig:Spine', 'Spine', 'Spine1', 'Chest'],
+        'Spine1': ['mixamorig:Spine1', 'Spine1', 'Spine2', 'UpperChest'],
+        'Spine2': ['mixamorig:Spine2', 'Spine2', 'Spine3', 'Chest'],
         'Neck': ['mixamorig:Neck', 'Neck', 'Neck1'],
         'Head': ['mixamorig:Head', 'Head'],
-        'LeftShoulder': ['mixamorig:LeftShoulder', 'LeftShoulder', 'L_Shoulder'],
-        'LeftArm': ['mixamorig:LeftArm', 'LeftArm', 'L_UpperArm'],
-        'LeftForeArm': ['mixamorig:LeftForeArm', 'LeftForeArm', 'L_LowerArm'],
-        'LeftHand': ['mixamorig:LeftHand', 'LeftHand', 'L_Hand'],
-        'RightShoulder': ['mixamorig:RightShoulder', 'RightShoulder', 'R_Shoulder'],
-        'RightArm': ['mixamorig:RightArm', 'RightArm', 'R_UpperArm'],
-        'RightForeArm': ['mixamorig:RightForeArm', 'RightForeArm', 'R_LowerArm'],
-        'RightHand': ['mixamorig:RightHand', 'RightHand', 'R_Hand'],
-        'LeftUpLeg': ['mixamorig:LeftUpLeg', 'LeftUpLeg', 'L_UpperLeg'],
-        'LeftLeg': ['mixamorig:LeftLeg', 'LeftLeg', 'L_LowerLeg'],
-        'LeftFoot': ['mixamorig:LeftFoot', 'LeftFoot', 'L_Foot'],
-        'RightUpLeg': ['mixamorig:RightUpLeg', 'RightUpLeg', 'R_UpperLeg'],
-        'RightLeg': ['mixamorig:RightLeg', 'RightLeg', 'R_LowerLeg'],
-        'RightFoot': ['mixamorig:RightFoot', 'RightFoot', 'R_Foot']
+        'LeftShoulder': ['mixamorig:LeftShoulder', 'LeftShoulder', 'L_Shoulder', 'Left_Shoulder'],
+        'LeftArm': ['mixamorig:LeftArm', 'LeftArm', 'L_UpperArm', 'Left_UpperArm'],
+        'LeftForeArm': ['mixamorig:LeftForeArm', 'LeftForeArm', 'L_LowerArm', 'Left_LowerArm'],
+        'LeftHand': ['mixamorig:LeftHand', 'LeftHand', 'L_Hand', 'Left_Hand'],
+        'RightShoulder': ['mixamorig:RightShoulder', 'RightShoulder', 'R_Shoulder', 'Right_Shoulder'],
+        'RightArm': ['mixamorig:RightArm', 'RightArm', 'R_UpperArm', 'Right_UpperArm'],
+        'RightForeArm': ['mixamorig:RightForeArm', 'RightForeArm', 'R_LowerArm', 'Right_LowerArm'],
+        'RightHand': ['mixamorig:RightHand', 'RightHand', 'R_Hand', 'Right_Hand'],
+        'LeftUpLeg': ['mixamorig:LeftUpLeg', 'LeftUpLeg', 'L_UpperLeg', 'Left_UpperLeg', 'L_Thigh'],
+        'LeftLeg': ['mixamorig:LeftLeg', 'LeftLeg', 'L_LowerLeg', 'Left_LowerLeg', 'L_Shin'],
+        'LeftFoot': ['mixamorig:LeftFoot', 'LeftFoot', 'L_Foot', 'Left_Foot'],
+        'RightUpLeg': ['mixamorig:RightUpLeg', 'RightUpLeg', 'R_UpperLeg', 'Right_UpperLeg', 'R_Thigh'],
+        'RightLeg': ['mixamorig:RightLeg', 'RightLeg', 'R_LowerLeg', 'Right_LowerLeg', 'R_Shin'],
+        'RightFoot': ['mixamorig:RightFoot', 'RightFoot', 'R_Foot', 'Right_Foot']
       };
 
-      // Build mapping
+      // Build comprehensive mapping with fuzzy matching
       targetSkeleton.bones.forEach(targetBone => {
         const targetName = targetBone.name;
         
@@ -110,9 +117,11 @@ export function useAnimationRegistry(): AnimationRegistry {
 
         // Try common mappings
         for (const [standardName, variations] of Object.entries(commonMappings)) {
-          if (variations.includes(targetName)) {
+          if (variations.some(v => targetName.toLowerCase().includes(v.toLowerCase()) || 
+                                    v.toLowerCase().includes(targetName.toLowerCase()))) {
             const sourceVariation = sourceSkeleton!.bones.find(b => 
-              variations.includes(b.name)
+              variations.some(v => b.name.toLowerCase().includes(v.toLowerCase()) ||
+                                   v.toLowerCase().includes(b.name.toLowerCase()))
             );
             if (sourceVariation) {
               boneMapping[sourceVariation.name] = targetName;
@@ -122,9 +131,12 @@ export function useAnimationRegistry(): AnimationRegistry {
         }
       });
 
-      // Use SkeletonUtils for retargeting if we have a good mapping
-      if (Object.keys(boneMapping).length > 5) {
+      console.log(`Bone mapping created: ${Object.keys(boneMapping).length} bones mapped`);
+
+      // Enhanced retargeting with coordinate system preservation
+      if (Object.keys(boneMapping).length > 3) {
         try {
+          // Create a modified clip that preserves model orientation
           const retargetedClip = SkeletonUtils.retargetClip(
             targetSkeleton.bones[0], // target root
             sourceSkeleton.bones[0], // source root
@@ -134,6 +146,15 @@ export function useAnimationRegistry(): AnimationRegistry {
           
           if (retargetedClip) {
             retargetedClip.name = sourceClip.name;
+            
+            // Remove root rotation track to avoid flipping the whole model
+            const rootNames = ['Hips', 'mixamorig:Hips', 'mixamorigHips'];
+            retargetedClip.tracks = retargetedClip.tracks.filter(track => {
+              const isRootQuat = rootNames.some(r => track.name.endsWith(`${r}.quaternion`));
+              return !isRootQuat;
+            });
+            
+            console.log(`Animation "${sourceClip.name}" retargeted successfully`);
             return retargetedClip;
           }
         } catch (error) {
@@ -141,6 +162,7 @@ export function useAnimationRegistry(): AnimationRegistry {
         }
       }
 
+      console.log(`Using original clip for "${sourceClip.name}" (insufficient bone mapping)`);
       return sourceClip.clone();
     } catch (error) {
       console.warn('Animation retargeting error:', error);

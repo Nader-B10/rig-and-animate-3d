@@ -91,7 +91,12 @@ export const AnimationControls = ({
         <div className="flex items-center justify-between mb-6">
           <div>
             <h3 className="text-lg font-semibold text-foreground">
-              التحكم بالأنميشن ({animations.length})
+              التحكم بالأنميشن ({animations.length}) 
+              {importedAnimations.length > 0 && (
+                <span className="text-sm text-muted-foreground">
+                  ({animations.length - importedAnimations.length} أصلية + {importedAnimations.length} مستوردة)
+                </span>
+              )}
             </h3>
             <p className="text-sm text-muted-foreground">
               {activeAnimation ? `الحالي: ${activeAnimation}` : 'لم يتم اختيار أنميشن'}

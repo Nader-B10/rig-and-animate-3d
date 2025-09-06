@@ -121,8 +121,11 @@ export const ModelExporter = ({
     return null;
   }
 
-  const originalCount = allAnimations.length - importedAnimations.length;
-  const hasImportedAnimations = importedAnimations.length > 0;
+  // Calculate correct counts for display
+  const totalAnimations = allAnimations.length;
+  const importedCount = importedAnimations.length;
+  const originalCount = Math.max(0, totalAnimations - importedCount);
+  const hasImportedAnimations = importedCount > 0;
 
   return (
     <Card className="gradient-card border-border shadow-card-custom">
@@ -145,9 +148,9 @@ export const ModelExporter = ({
           <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
             <p className="text-sm text-foreground mb-2">معلومات المودل:</p>
             <ul className="text-xs text-muted-foreground space-y-1">
-              <li>• إجمالي الأنميشن: <span className="font-semibold text-primary">{allAnimations.length}</span></li>
+              <li>• إجمالي الأنميشن: <span className="font-semibold text-primary">{totalAnimations}</span></li>
               <li>• أنميشن أصلية: <span className="font-semibold text-secondary-foreground">{originalCount}</span></li>
-              <li>• أنميشن مستوردة: <span className="font-semibold text-accent-foreground">{importedAnimations.length}</span></li>
+              <li>• أنميشن مستوردة: <span className="font-semibold text-accent-foreground">{importedCount}</span></li>
               <li>• سيتم تصدير جميع الأنميشن مدمجة مع الأسماء المحدثة</li>
               {hasImportedAnimations && <li>• تم دمج أنميشن Mixamo مع السكيلتون الأصلي</li>}
             </ul>

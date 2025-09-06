@@ -111,7 +111,11 @@ function Model({ url, fileType, onAnimationsFound, activeAnimation, isPlaying, i
     if (animationNames.length > 0) {
       onAnimationsFound(animationNames);
     }
-  }, [animationRegistry.items, onAnimationsFound]);
+    // Keep parent informed about latest animations for accurate counts
+    if (onModelSceneReady && modelData) {
+      onModelSceneReady(modelData.scene, allAnimationClips);
+    }
+  }, [animationRegistry.items, onAnimationsFound, onModelSceneReady, modelData, allAnimationClips]);
 
   // Handle animation playback
   useEffect(() => {
