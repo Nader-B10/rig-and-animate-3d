@@ -252,8 +252,9 @@ export const ModelViewer = ({ modelUrl, fileType, onUpload, importedAnimations, 
       if (activeAnimation === oldName) {
         setActiveAnimation(newName);
       }
-      // Update animations list
-      setAnimations(prev => prev.map(name => name === oldName ? newName : name));
+      // Update animations list immediately
+      const updatedNames = animationRegistry.getAnimationNames();
+      setAnimations(updatedNames);
     }
   }, [animationRegistry, activeAnimation]);
 
