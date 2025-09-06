@@ -57,40 +57,25 @@ export function useAnimationRegistry(): AnimationRegistry {
     }
 
     try {
-      // Find source skeleton with enhanced detection - traverse entire hierarchy
+      // Find source skeleton with enhanced detection
       let sourceSkeleton: THREE.Skeleton | null = null;
       let sourceSkinnedMesh: THREE.SkinnedMesh | null = null;
       
-      const findSkeleton = (object: THREE.Object3D) => {
-        if (object instanceof THREE.SkinnedMesh && object.skeleton && !sourceSkeleton) {
-          sourceSkeleton = object.skeleton;
-          sourceSkinnedMesh = object;
-          return;
+      sourceRoot.traverse((child) => {
+        if (child instanceof THREE.SkinnedMesh && child.skeleton && !sourceSkeleton) {
+          sourceSkeleton = child.skeleton;
+          sourceSkinnedMesh = child;
         }
-        
-        // Also check for skeleton objects directly
-        if (object instanceof THREE.Skeleton && !sourceSkeleton) {
-          sourceSkeleton = object;
-        }
-        
-        object.children.forEach(findSkeleton);
-      };
-      
-      findSkeleton(sourceRoot);
+      });
 
-      if (!sourceSkeleton) {
+      if (!sourceSkeleton || !sourceSkinnedMesh) {
         console.warn('No source skeleton found, using original clip');
         return sourceClip.clone();
       }
 
-      // Store original orientations if available
-      let originalRotation: THREE.Euler | null = null;
-      let originalScale: THREE.Vector3 | null = null;
-      
-      if (sourceSkinnedMesh) {
-        originalRotation = sourceSkinnedMesh.rotation.clone();
-        originalScale = sourceSkinnedMesh.scale.clone();
-      }
+      // Preserve original model orientation by ensuring consistent coordinate systems
+      const originalRotation = sourceSkinnedMesh.rotation.clone();
+      const originalScale = sourceSkinnedMesh.scale.clone();
       
       // Create enhanced bone mapping with coordinate system preservation
       const boneMapping: Record<string, string> = {};
@@ -162,19 +147,11 @@ export function useAnimationRegistry(): AnimationRegistry {
           if (retargetedClip) {
             retargetedClip.name = sourceClip.name;
             
-            // Remove problematic root tracks that can flip the model
-            const problematicRootNames = [
-              'Hips', 'mixamorig:Hips', 'mixamorigHips', 'Hip', 'Root', 'Pelvis',
-              'Armature', 'Armature|mixamo.com|Layer0'
-            ];
-            
+            // Remove root rotation track to avoid flipping the whole model
+            const rootNames = ['Hips', 'mixamorig:Hips', 'mixamorigHips'];
             retargetedClip.tracks = retargetedClip.tracks.filter(track => {
-              // Remove root quaternion and position tracks that cause flipping
-              const isProblematicTrack = problematicRootNames.some(rootName => 
-                track.name.includes(rootName) && 
-                (track.name.endsWith('.quaternion') || track.name.endsWith('.position'))
-              );
-              return !isProblematicTrack;
+              const isRootQuat = rootNames.some(r => track.name.endsWith(`${r}.quaternion`));
+              return !isRootQuat;
             });
             
             console.log(`Animation "${sourceClip.name}" retargeted successfully`);
