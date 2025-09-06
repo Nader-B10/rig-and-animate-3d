@@ -165,6 +165,9 @@ function Model({ url, fileType, onAnimationsFound, activeAnimation, isPlaying, i
     }
   });
 
+  // Create skeleton helper BEFORE any early returns to keep hook order stable
+  const skeletonHelper = useSkeletonHelper(modelData?.scene || null, showSkeleton);
+
   if (isLoading || !modelData) {
     return (
       <group>
@@ -175,9 +178,6 @@ function Model({ url, fileType, onAnimationsFound, activeAnimation, isPlaying, i
       </group>
     );
   }
-
-  // Create skeleton helper
-  const skeletonHelper = useSkeletonHelper(modelData?.scene || null, showSkeleton);
 
   return (
     <group ref={group}>
