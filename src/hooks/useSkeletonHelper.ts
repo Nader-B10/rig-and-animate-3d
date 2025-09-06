@@ -4,6 +4,8 @@ import * as THREE from 'three';
 export function useSkeletonHelper(scene: THREE.Object3D | null, visible: boolean = false) {
   const skeletonHelper = useMemo(() => {
     if (!scene || !visible) return null;
+    
+    console.log('[SkeletonHelper] Creating skeleton helper for scene');
 
     // Enhanced skeleton detection - check all possible SkinnedMesh locations
     let targetMesh: THREE.SkinnedMesh | null = null;
@@ -20,23 +22,27 @@ export function useSkeletonHelper(scene: THREE.Object3D | null, visible: boolean
 
     // If no SkinnedMesh found, create a debug log
     if (allSkinnedMeshes.length === 0) {
-      console.log('No SkinnedMesh found in scene for skeleton helper');
+      console.log('[SkeletonHelper] No SkinnedMesh found in scene for skeleton helper');
       return null;
     }
+    
+    console.log(`[SkeletonHelper] Found ${allSkinnedMeshes.length} SkinnedMesh objects`);
 
     // Select the mesh with the most bones (usually the main character)
     if (allSkinnedMeshes.length > 1) {
       targetMesh = allSkinnedMeshes.reduce((prev, current) => 
         (current.skeleton.bones.length > prev.skeleton.bones.length) ? current : prev
       );
+      console.log(`[SkeletonHelper] Selected mesh with ${targetMesh.skeleton.bones.length} bones`);
     }
 
     if (!targetMesh || !targetMesh.skeleton) {
-      console.warn('No valid skeleton found for helper');
+      console.warn('[SkeletonHelper] No valid skeleton found for helper');
       return null;
     }
 
     try {
+      console.log(`[SkeletonHelper] Creating helper for skeleton with ${targetMesh.skeleton.bones.length} bones`);
       const helper = new THREE.SkeletonHelper(targetMesh);
       if (helper.material instanceof THREE.LineBasicMaterial) {
         helper.material.linewidth = 3; // Increased line width for better visibility
@@ -48,10 +54,10 @@ export function useSkeletonHelper(scene: THREE.Object3D | null, visible: boolean
       helper.visible = visible;
       helper.name = 'SkeletonHelper';
       
-      console.log(`Skeleton helper created with ${targetMesh.skeleton.bones.length} bones`);
+      console.log(`[SkeletonHelper] Skeleton helper created with ${targetMesh.skeleton.bones.length} bones`);
       return helper;
     } catch (error) {
-      console.warn('Failed to create skeleton helper:', error);
+      console.warn('[SkeletonHelper] Failed to create skeleton helper:', error);
       return null;
     }
   }, [scene, visible]);

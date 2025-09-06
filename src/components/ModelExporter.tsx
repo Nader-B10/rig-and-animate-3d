@@ -31,32 +31,39 @@ export const ModelExporter = ({
   
   const exportModel = useCallback(async (format: 'glb' | 'gltf') => {
     if (!modelScene || !modelUrl) {
+      console.warn('[ModelExporter] No model scene or URL available for export');
       toast.error('لا يوجد مودل للتصدير');
       return;
     }
 
+    console.log(`[ModelExporter] Starting export to ${format.toUpperCase()} format`);
     setIsExporting(true);
     
     try {
       const exporter = new GLTFExporter();
       
+      console.log('[ModelExporter] Cloning scene for export...');
       // Clone the scene to avoid modifying the original
       const sceneClone = modelScene.clone();
       
+      console.log(`[ModelExporter] Preparing ${allAnimations.length} animations for export`);
       // Prepare all animations with proper naming and ensure they're properly formatted
       const exportAnimations = allAnimations.map((clip, index) => {
         const clonedClip = clip.clone();
         // Ensure animation has a valid name
         if (!clonedClip.name || clonedClip.name === '') {
           clonedClip.name = `Animation_${index + 1}`;
+          console.log(`[ModelExporter] Renamed animation ${index} to: ${clonedClip.name}`);
         }
         // Validate animation tracks
         clonedClip.tracks = clonedClip.tracks.filter(track => 
           track && track.name && track.times && track.values
         );
+        console.log(`[ModelExporter] Animation "${clonedClip.name}" has ${clonedClip.tracks.length} valid tracks`);
         return clonedClip;
       });
       
+      console.log('[ModelExporter] Export options configured');
       const options = {
         binary: format === 'glb',
         animations: exportAnimations,
@@ -69,6 +76,7 @@ export const ModelExporter = ({
         forcePowerOfTwoTextures: false
       };
 
+      console.log('[ModelExporter] Starting GLTFExporter.parse...');
       const result = await new Promise<ArrayBuffer | any>((resolve, reject) => {
         exporter.parse(
           sceneClone,
@@ -78,6 +86,7 @@ export const ModelExporter = ({
         );
       });
 
+      console.log(`[ModelExporter] Export completed, creating ${format.toUpperCase()} blob`);
       let blob: Blob;
       let filename: string;
       
@@ -90,6 +99,7 @@ export const ModelExporter = ({
         filename = `merged_model_${Date.now()}.gltf`;
       }
       
+      console.log(`[ModelExporter] Downloading file: ${filename} (${(blob.size / 1024 / 1024).toFixed(2)}MB)`);
       // Download file
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -109,8 +119,9 @@ export const ModelExporter = ({
       const fileSize = (blob.size / (1024 * 1024)).toFixed(2);
       
       toast.success(`تم تصدير المودل بنجاح! (${originalCount} أصلية + ${importedCount} مستوردة، ${fileSize}MB)`);
+      console.log(`[ModelExporter] Export successful: ${filename}, ${fileSize}MB`);
     } catch (error) {
-      console.error('Export error:', error);
+      console.error('[ModelExporter] Export error:', error);
       toast.error('خطأ في تصدير المودل: ' + (error instanceof Error ? error.message : 'خطأ غير معروف'));
     } finally {
       setIsExporting(false);

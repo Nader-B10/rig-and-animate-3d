@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { useModelLoader } from '@/hooks/useModelLoader';
 import { useAnimationRegistry } from '@/hooks/useAnimationRegistry';
 import { useSkeletonHelper } from '@/hooks/useSkeletonHelper';
+import { PerformanceMonitor } from '@/components/PerformanceMonitor';
 import { AnimationControls } from '@/components/AnimationControls';
 import { Button } from '@/components/ui/button';
 import { Upload } from 'lucide-react';
@@ -41,7 +42,7 @@ function Model({ url, fileType, onAnimationsFound, activeAnimation, isPlaying, i
   
   useEffect(() => {
     if (error) {
-      console.error('Error loading model:', error);
+      console.error('[ModelViewer] Error loading model:', error);
       toast.error('خطأ في تحميل المودل');
     }
   }, [error]);
@@ -50,29 +51,43 @@ function Model({ url, fileType, onAnimationsFound, activeAnimation, isPlaying, i
   useEffect(() => {
     if (!modelData) {
       setTargetSkeleton(null);
+      console.log('[ModelViewer] Model data cleared, skeleton reset');
       return;
     }
 
+    console.log('[ModelViewer] Extracting skeleton from loaded model...');
     let skeleton: THREE.Skeleton | null = null;
     modelData.scene.traverse((child) => {
       if (child instanceof THREE.SkinnedMesh && child.skeleton && !skeleton) {
         skeleton = child.skeleton;
+        console.log(`[ModelViewer] Found skeleton with ${skeleton.bones.length} bones`);
       }
     });
+    
+    if (!skeleton) {
+      console.warn('[ModelViewer] No skeleton found in model');
+    }
     
     setTargetSkeleton(skeleton);
   }, [modelData]);
 
   // Initialize animations when model loads
   useEffect(() => {
-    if (!modelData) return;
+    if (!modelData) {
+      console.log('[ModelViewer] No model data for animation initialization');
+      return;
+    }
     
+    console.log(`[ModelViewer] Initializing ${modelData.animations.length} original animations`);
     // Add original animations to registry
     animationRegistry.addOriginalAnimations(modelData.animations);
   }, [modelData, animationRegistry]);
 
   // Add imported animations when they change
   useEffect(() => {
+    if (importedAnimations.length > 0) {
+      console.log(`[ModelViewer] Adding ${importedAnimations.length} imported animations to registry`);
+    }
     animationRegistry.addImportedAnimations(importedAnimations, targetSkeleton);
   }, [importedAnimations, targetSkeleton, animationRegistry]);
 
@@ -82,9 +97,15 @@ function Model({ url, fileType, onAnimationsFound, activeAnimation, isPlaying, i
   
   // Notify about animations found (only once per model change)
   useEffect(() => {
-    if (!modelData || hasNotified) return;
+    if (!modelData || hasNotified) {
+      if (!modelData) console.log('[ModelViewer] No model data for animation notification');
+      if (hasNotified) console.log('[ModelViewer] Already notified about animations');
+      return;
+    }
     
     const animationNames = animationRegistry.getAnimationNames();
+    console.log(`[ModelViewer] Found animation names:`, animationNames);
+    
     if (animationNames.length > 0) {
       onAnimationsFound(animationNames);
       
@@ -102,6 +123,7 @@ function Model({ url, fileType, onAnimationsFound, activeAnimation, isPlaying, i
       }
       
       setHasNotified(true);
+      console.log('[ModelViewer] Animation notification completed');
     }
   }, [modelData, animationRegistry, onAnimationsFound, onModelSceneReady, importedAnimations.length, hasNotified, allAnimationClips]);
 
@@ -120,13 +142,17 @@ function Model({ url, fileType, onAnimationsFound, activeAnimation, isPlaying, i
   // Handle animation playback
   useEffect(() => {
     if (activeAnimation && actions[activeAnimation]) {
+      console.log(`[ModelViewer] Starting animation: ${activeAnimation}`);
       Object.values(actions).forEach(action => action?.stop());
       
       const action = actions[activeAnimation];
       if (action) {
         action.reset().play();
         action.paused = !isPlaying;
+        console.log(`[ModelViewer] Animation ${activeAnimation} ${isPlaying ? 'playing' : 'paused'}`);
       }
+    } else if (activeAnimation) {
+      console.warn(`[ModelViewer] Animation action not found: ${activeAnimation}`);
     }
   }, [activeAnimation, actions, isPlaying]);
 
@@ -135,6 +161,7 @@ function Model({ url, fileType, onAnimationsFound, activeAnimation, isPlaying, i
       const action = actions[activeAnimation];
       if (action) {
         action.paused = !isPlaying;
+        console.log(`[ModelViewer] Animation playback ${isPlaying ? 'resumed' : 'paused'}: ${activeAnimation}`);
       }
     }
   }, [isPlaying, activeAnimation, actions]);
@@ -146,6 +173,7 @@ function Model({ url, fileType, onAnimationsFound, activeAnimation, isPlaying, i
       if (action) {
         action.time = animationProgress;
         mixer.update(0); // Update mixer without advancing time
+        console.log(`[ModelViewer] Animation seeked to: ${animationProgress.toFixed(2)}s`);
       }
     }
   }, [animationProgress, activeAnimation, actions, mixer]);
@@ -322,6 +350,7 @@ export const ModelViewer = ({ modelUrl, fileType, onUpload, importedAnimations, 
                 blur={2}
                 far={4}
               />
+              <PerformanceMonitor />
             </Canvas>
             
             <div className="absolute top-4 left-4 bg-black/20 backdrop-blur-sm rounded-lg px-3 py-2">

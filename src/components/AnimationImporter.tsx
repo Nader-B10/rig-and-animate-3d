@@ -27,42 +27,58 @@ export const AnimationImporter = ({ onAnimationImport, importedAnimations }: Ani
 
   const handleAnimationFile = useCallback(async (url: string, fileType: 'gltf' | 'glb' | 'fbx') => {
     setIsLoading(true);
+    console.log(`[AnimationImporter] Loading animation file: ${fileType.toUpperCase()}`);
     
     try {
       let animations: THREE.AnimationClip[] = [];
       let sourceRoot: THREE.Object3D | null = null;
       
       if (fileType === 'fbx') {
+        console.log('[AnimationImporter] Loading FBX animation...');
         const loader = new FBXLoader();
         
         await new Promise<void>((resolve, reject) => {
           loader.load(url, (fbx) => {
+            console.log('[AnimationImporter] FBX loaded successfully');
             sourceRoot = fbx;
             if (fbx.animations && fbx.animations.length > 0) {
               animations = fbx.animations;
+              console.log(`[AnimationImporter] Found ${animations.length} animations in FBX`);
               resolve();
             } else {
+              console.warn('[AnimationImporter] No animations found in FBX file');
               reject(new Error('لم يتم العثور على أنميشن في ملف FBX'));
             }
-          }, undefined, reject);
+          }, undefined, (error) => {
+            console.error('[AnimationImporter] FBX loading error:', error);
+            reject(error);
+          });
         });
       } else {
+        console.log(`[AnimationImporter] Loading ${fileType.toUpperCase()} animation...`);
         const loader = new GLTFLoader();
         
         await new Promise<void>((resolve, reject) => {
           loader.load(url, (gltf) => {
+            console.log(`[AnimationImporter] ${fileType.toUpperCase()} loaded successfully`);
             sourceRoot = gltf.scene;
             if (gltf.animations && gltf.animations.length > 0) {
               animations = gltf.animations;
+              console.log(`[AnimationImporter] Found ${animations.length} animations in ${fileType.toUpperCase()}`);
               resolve();
             } else {
+              console.warn(`[AnimationImporter] No animations found in ${fileType.toUpperCase()} file`);
               reject(new Error('لم يتم العثور على أنميشن في الملف'));
             }
-          }, undefined, reject);
+          }, undefined, (error) => {
+            console.error(`[AnimationImporter] ${fileType.toUpperCase()} loading error:`, error);
+            reject(error);
+          });
         });
       }
       
       if (animations.length > 0) {
+        console.log('[AnimationImporter] Processing animations...');
         const newAnimations: ImportedAnimation[] = animations.map((clip, index) => ({
           id: `imported_${Date.now()}_${index}`,
           name: clip.name || `${fileType.toUpperCase()} Animation ${index + 1}`,
@@ -71,14 +87,17 @@ export const AnimationImporter = ({ onAnimationImport, importedAnimations }: Ani
           sourceRoot
         }));
         
+        console.log('[AnimationImporter] Created animation objects:', newAnimations.map(a => a.name));
+        
         const updatedAnimations = [...importedAnimations, ...newAnimations];
         onAnimationImport(updatedAnimations);
         
         toast.success(`تم استيراد ${newAnimations.length} أنميشن من ${fileType.toUpperCase()}!`);
         setShowUpload(false);
+        console.log('[AnimationImporter] Animation import completed successfully');
       }
     } catch (error) {
-      console.error('Error loading animation:', error);
+      console.error('[AnimationImporter] Error loading animation:', error);
       toast.error(error instanceof Error ? error.message : 'خطأ في تحميل الأنميشن');
     } finally {
       setIsLoading(false);
@@ -86,6 +105,7 @@ export const AnimationImporter = ({ onAnimationImport, importedAnimations }: Ani
   }, [importedAnimations, onAnimationImport]);
 
   const removeAnimation = useCallback((id: string) => {
+    console.log(`[AnimationImporter] Removing animation with id: ${id}`);
     const animationToRemove = importedAnimations.find(anim => anim.id === id);
     if (animationToRemove) {
       URL.revokeObjectURL(animationToRemove.url);
@@ -97,6 +117,7 @@ export const AnimationImporter = ({ onAnimationImport, importedAnimations }: Ani
   }, [importedAnimations, onAnimationImport]);
 
   const clearAllAnimations = useCallback(() => {
+    console.log('[AnimationImporter] Clearing all imported animations');
     importedAnimations.forEach(anim => {
       URL.revokeObjectURL(anim.url);
     });

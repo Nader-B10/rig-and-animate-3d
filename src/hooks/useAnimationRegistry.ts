@@ -33,16 +33,20 @@ export function useAnimationRegistry(): AnimationRegistry {
   const [registryItems, setRegistryItems] = useState<AnimationRegistryItem[]>([]);
 
   const addOriginalAnimations = useCallback((clips: THREE.AnimationClip[]) => {
+    console.log(`[AnimationRegistry] Adding ${clips.length} original animations`);
     const originalItems: AnimationRegistryItem[] = clips.map((clip, index) => ({
       id: `original_${index}_${Date.now()}`,
       name: clip.name || `Animation ${index + 1}`,
       clip: clip.clone(),
       isImported: false
     }));
+    
+    console.log('[AnimationRegistry] Original animations:', originalItems.map(item => item.name));
 
     setRegistryItems(prev => {
       // Remove old original animations and add new ones
       const importedOnly = prev.filter(item => item.isImported);
+      console.log(`[AnimationRegistry] Keeping ${importedOnly.length} imported animations`);
       return [...originalItems, ...importedOnly];
     });
   }, []);
@@ -52,7 +56,10 @@ export function useAnimationRegistry(): AnimationRegistry {
     sourceRoot: THREE.Object3D | null,
     targetSkeleton?: THREE.Skeleton
   ): THREE.AnimationClip => {
+    console.log(`[AnimationRegistry] Retargeting animation: ${sourceClip.name}`);
+    
     if (!sourceRoot || !targetSkeleton) {
+      console.log('[AnimationRegistry] No source root or target skeleton, using original clip');
       return sourceClip.clone();
     }
 
@@ -69,9 +76,12 @@ export function useAnimationRegistry(): AnimationRegistry {
       });
 
       if (!sourceSkeleton || !sourceSkinnedMesh) {
-        console.warn('No source skeleton found, using original clip');
+        console.warn('[AnimationRegistry] No source skeleton found, using original clip');
         return sourceClip.clone();
       }
+      
+      console.log(`[AnimationRegistry] Found source skeleton with ${sourceSkeleton.bones.length} bones`);
+      console.log(`[AnimationRegistry] Target skeleton has ${targetSkeleton.bones.length} bones`);
 
       // Preserve original model orientation by ensuring consistent coordinate systems
       const originalRotation = sourceSkinnedMesh.rotation.clone();
@@ -131,11 +141,13 @@ export function useAnimationRegistry(): AnimationRegistry {
         }
       });
 
-      console.log(`Bone mapping created: ${Object.keys(boneMapping).length} bones mapped`);
+      console.log(`[AnimationRegistry] Bone mapping created: ${Object.keys(boneMapping).length} bones mapped`);
+      console.log('[AnimationRegistry] Bone mapping:', boneMapping);
 
       // Enhanced retargeting with coordinate system preservation
       if (Object.keys(boneMapping).length > 3) {
         try {
+          console.log('[AnimationRegistry] Attempting retargeting with SkeletonUtils...');
           // Create a modified clip that preserves model orientation
           const retargetedClip = SkeletonUtils.retargetClip(
             targetSkeleton.bones[0], // target root
@@ -154,18 +166,18 @@ export function useAnimationRegistry(): AnimationRegistry {
               return !isRootQuat;
             });
             
-            console.log(`Animation "${sourceClip.name}" retargeted successfully`);
+            console.log(`[AnimationRegistry] Animation "${sourceClip.name}" retargeted successfully`);
             return retargetedClip;
           }
         } catch (error) {
-          console.warn('Retargeting failed, using original clip:', error);
+          console.warn('[AnimationRegistry] Retargeting failed, using original clip:', error);
         }
       }
 
-      console.log(`Using original clip for "${sourceClip.name}" (insufficient bone mapping)`);
+      console.log(`[AnimationRegistry] Using original clip for "${sourceClip.name}" (insufficient bone mapping)`);
       return sourceClip.clone();
     } catch (error) {
-      console.warn('Animation retargeting error:', error);
+      console.warn('[AnimationRegistry] Animation retargeting error:', error);
       return sourceClip.clone();
     }
   }, []);
@@ -174,7 +186,10 @@ export function useAnimationRegistry(): AnimationRegistry {
     imported: ImportedAnimation[],
     targetSkeleton?: THREE.Skeleton
   ) => {
+    console.log(`[AnimationRegistry] Adding ${imported.length} imported animations`);
+    
     const importedItems: AnimationRegistryItem[] = imported.map((anim, index) => {
+      console.log(`[AnimationRegistry] Processing imported animation: ${anim.name}`);
       const retargetedClip = retargetAnimation(anim.clip, anim.sourceRoot, targetSkeleton);
       
       return {
@@ -185,6 +200,8 @@ export function useAnimationRegistry(): AnimationRegistry {
         sourceType: anim.url.includes('fbx') ? 'FBX' : 'Mixamo'
       };
     });
+    
+    console.log('[AnimationRegistry] Imported animations processed:', importedItems.map(item => `${item.name} (${item.sourceType})`));
 
     setRegistryItems(prev => {
       // Remove old imported animations and add new ones
@@ -194,6 +211,7 @@ export function useAnimationRegistry(): AnimationRegistry {
   }, [retargetAnimation]);
 
   const renameAnimation = useCallback((id: string, newName: string): boolean => {
+    console.log(`[AnimationRegistry] Renaming animation ${id} to: ${newName}`);
     setRegistryItems(prev => {
       const item = prev.find(item => item.id === id);
       if (!item) return prev;
@@ -207,18 +225,24 @@ export function useAnimationRegistry(): AnimationRegistry {
   }, []);
 
   const getAllClips = useCallback((): THREE.AnimationClip[] => {
-    return registryItems.map(item => item.clip);
+    const clips = registryItems.map(item => item.clip);
+    console.log(`[AnimationRegistry] Returning ${clips.length} animation clips`);
+    return clips;
   }, [registryItems]);
 
   const getAnimationNames = useCallback((): string[] => {
-    return registryItems.map(item => item.name);
+    const names = registryItems.map(item => item.name);
+    console.log(`[AnimationRegistry] Returning animation names:`, names);
+    return names;
   }, [registryItems]);
 
   const removeImportedAnimations = useCallback(() => {
+    console.log('[AnimationRegistry] Removing all imported animations');
     setRegistryItems(prev => prev.filter(item => !item.isImported));
   }, []);
 
   const clear = useCallback(() => {
+    console.log('[AnimationRegistry] Clearing all animations');
     setRegistryItems([]);
   }, []);
 

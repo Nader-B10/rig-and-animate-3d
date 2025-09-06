@@ -18,14 +18,24 @@ export class ErrorBoundary extends Component<Props, State> {
   };
 
   public static getDerivedStateFromError(error: Error): State {
+    console.error('[ErrorBoundary] Error caught by boundary:', error);
     return { hasError: true, error };
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('ErrorBoundary caught an error:', error, errorInfo);
+    console.error('[ErrorBoundary] Error details:', {
+      error: error.message,
+      stack: error.stack,
+      componentStack: errorInfo.componentStack,
+      errorBoundary: 'Main Application Boundary'
+    });
+    
+    // Log to external service if needed
+    // logErrorToService(error, errorInfo);
   }
 
   private handleReset = () => {
+    console.log('[ErrorBoundary] Resetting error boundary');
     this.setState({ hasError: false, error: undefined });
   };
 
