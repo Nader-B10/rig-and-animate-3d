@@ -1,13 +1,14 @@
 import * as THREE from 'three';
 import { ModelOptimizer } from './modelOptimizer';
+import { clone as skeletonClone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 
 export class SceneProcessor {
   /**
    * Creates a clean clone of the scene for export
    */
   static createExportScene(originalScene: THREE.Object3D): THREE.Object3D {
-    // Create a deep clone of the scene
-    const exportScene = originalScene.clone(true);
+    // Create a deep clone of the scene preserving skinning/bone references
+    const exportScene = skeletonClone(originalScene);
     
     // Reset transformations that might cause issues
     exportScene.position.set(0, 0, 0);
