@@ -69,13 +69,27 @@ export function useAnimationRegistry(): AnimationRegistry {
       });
 
       if (!sourceSkeleton || !sourceSkinnedMesh) {
-        console.warn('No source skeleton found, using original clip');
-        return sourceClip.clone();
+        // Fall back: build skeleton from Bone nodes (some GLTF/FBX animations contain bones without SkinnedMesh)
+        const sourceBones: THREE.Bone[] = [];
+        sourceRoot.traverse((child) => {
+          if ((child as any).isBone) {
+            sourceBones.push(child as THREE.Bone);
+          }
+        });
+        if (sourceBones.length > 0) {
+          sourceSkeleton = new THREE.Skeleton(sourceBones);
+          // create a dummy skinned mesh reference using the root bone's transform if available
+          sourceSkinnedMesh = null as any; // not needed beyond orientation capture
+        } else {
+          console.warn('No source skeleton found, using original clip');
+          return sourceClip.clone();
+        }
       }
 
-      // Preserve original model orientation by ensuring consistent coordinate systems
-      const originalRotation = sourceSkinnedMesh.rotation.clone();
-      const originalScale = sourceSkinnedMesh.scale.clone();
+      // Preserve original model orientation (noop placeholder when skinned mesh is present)
+      if (sourceSkinnedMesh) {
+        // Potential place for future axis alignment based on mesh transforms
+      }
       
       // Create enhanced bone mapping with coordinate system preservation
       const boneMapping: Record<string, string> = {};
@@ -136,10 +150,18 @@ export function useAnimationRegistry(): AnimationRegistry {
       // Enhanced retargeting with coordinate system preservation
       if (Object.keys(boneMapping).length > 3) {
         try {
+          // Determine root bones robustly (bone without a Bone parent)
+          const getRootBone = (skel: THREE.Skeleton) =>
+            skel.bones.find(b => !(b.parent && (b.parent as any).isBone)) || skel.bones[0];
+
+          const targetRootBone = getRootBone(targetSkeleton);
+          const sourceRootBone = getRootBone(sourceSkeleton!);
+          const targetBoneNames = new Set(targetSkeleton.bones.map(b => b.name));
+
           // Create a modified clip that preserves model orientation
           const retargetedClip = SkeletonUtils.retargetClip(
-            targetSkeleton.bones[0], // target root
-            sourceSkeleton.bones[0], // source root
+            targetRootBone, // target root
+            sourceRootBone, // source root
             sourceClip,
             boneMapping
           );
@@ -147,11 +169,16 @@ export function useAnimationRegistry(): AnimationRegistry {
           if (retargetedClip) {
             retargetedClip.name = sourceClip.name;
             
-            // Remove root rotation track to avoid flipping the whole model
-            const rootNames = ['Hips', 'mixamorig:Hips', 'mixamorigHips'];
+            // Sanitize tracks: drop any non-bone targets and remove root rotation to avoid global flips
+            const rootNames = new Set([
+              'Armature','Armature|Armature','Root','root','mixamorig:Root','mixamorig:Armature',
+              'Hips','mixamorig:Hips','mixamorigHips', targetRootBone.name
+            ]);
             retargetedClip.tracks = retargetedClip.tracks.filter(track => {
-              const isRootQuat = rootNames.some(r => track.name.endsWith(`${r}.quaternion`));
-              return !isRootQuat;
+              const nodeName = track.name.split('.')[0];
+              if (!targetBoneNames.has(nodeName)) return false; // ignore non-bone nodes
+              const isRootTransform = (track.name.endsWith('.quaternion') || track.name.endsWith('.rotation') || track.name.endsWith('.position') || track.name.endsWith('.scale')) && rootNames.has(nodeName);
+              return !isRootTransform;
             });
             
             console.log(`Animation "${sourceClip.name}" retargeted successfully`);
@@ -176,6 +203,8 @@ export function useAnimationRegistry(): AnimationRegistry {
   ) => {
     const importedItems: AnimationRegistryItem[] = imported.map((anim, index) => {
       const retargetedClip = retargetAnimation(anim.clip, anim.sourceRoot, targetSkeleton);
+      // Ensure clip name matches registry item name to keep actions lookup consistent
+      retargetedClip.name = anim.name;
       
       return {
         id: anim.id,
