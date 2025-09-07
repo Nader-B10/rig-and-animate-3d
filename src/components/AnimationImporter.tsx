@@ -65,7 +65,7 @@ export const AnimationImporter = ({ onAnimationImport, importedAnimations }: Ani
       if (animations.length > 0) {
         const newAnimations: ImportedAnimation[] = animations.map((clip, index) => ({
           id: `imported_${Date.now()}_${index}`,
-          name: clip.name || `${fileType.toUpperCase()} Animation ${index + 1}`,
+          name: clip.name || `أنميشن ${fileType.toUpperCase()} ${index + 1}`,
           url,
           clip: clip.clone(), // Clone to avoid conflicts
           sourceRoot
@@ -176,9 +176,9 @@ export const AnimationImporter = ({ onAnimationImport, importedAnimations }: Ani
                   className="flex items-center justify-between p-3 rounded-lg bg-primary/5 border border-primary/20"
                 >
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-foreground truncate">{animation.name}</p>
+                    <p className="font-medium text-foreground truncate text-right" dir="rtl">{animation.name}</p>
                     <p className="text-xs text-muted-foreground">
-                      {animation.url.includes('fbx') ? 'FBX Animation' : 'Mixamo Animation'}
+                      {animation.url.includes('fbx') ? 'أنميشن FBX' : 'أنميشن Mixamo'}
                     </p>
                   </div>
                   <Button

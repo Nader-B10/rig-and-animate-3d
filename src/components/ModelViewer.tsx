@@ -96,7 +96,7 @@ function Model({ url, fileType, onAnimationsFound, activeAnimation, isPlaying, i
       const importedCount = importedAnimations.length;
       
       if (importedCount > 0) {
-        toast.success(`المودل: ${originalCount} أنميشن، Mixamo: ${importedCount} أنميشن`);
+        toast.success(`تم تحميل ${originalCount} أنميشن أصلية و ${importedCount} أنميشن مستوردة بنجاح`);
       } else if (originalCount > 0) {
         toast.success(`تم العثور على ${originalCount} انميشن!`);
       }

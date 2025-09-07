@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import * as THREE from 'three';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { toast } from 'sonner';
 
 interface ImportedAnimation {
   id: string;
@@ -32,20 +33,71 @@ interface AnimationRegistry {
 export function useAnimationRegistry(): AnimationRegistry {
   const [registryItems, setRegistryItems] = useState<AnimationRegistryItem[]>([]);
 
+  // Helper function to generate unique names with conflict resolution
+  const generateUniqueName = useCallback((
+    baseName: string, 
+    existingNames: Set<string>, 
+    prefix: string = '',
+    isImported: boolean = false
+  ): string => {
+    // Clean the base name first
+    let cleanName = baseName.trim();
+    
+    // Remove common prefixes that might cause confusion
+    const prefixesToRemove = ['mixamorig:', 'mixamo:', 'Armature|'];
+    prefixesToRemove.forEach(p => {
+      if (cleanName.startsWith(p)) {
+        cleanName = cleanName.substring(p.length);
+      }
+    });
+    
+    // Apply appropriate prefix based on source
+    let proposedName = prefix ? `${prefix}${cleanName}` : cleanName;
+    
+    // If name doesn't exist, return it
+    if (!existingNames.has(proposedName)) {
+      return proposedName;
+    }
+    
+    // Handle conflicts with intelligent numbering
+    let counter = 1;
+    let uniqueName: string;
+    
+    do {
+      if (isImported) {
+        // For imported animations, use descriptive suffixes
+        uniqueName = `${proposedName} (مستورد ${counter})`;
+      } else {
+        // For original animations, use simple numbering
+        uniqueName = `${proposedName} ${counter}`;
+      }
+      counter++;
+    } while (existingNames.has(uniqueName) && counter < 100); // Safety limit
+    
+    return uniqueName;
+  }, []);
   const addOriginalAnimations = useCallback((clips: THREE.AnimationClip[]) => {
+    const existingNames = new Set<string>();
+    
     const originalItems: AnimationRegistryItem[] = clips.map((clip, index) => ({
-      id: `original_${index}_${Date.now()}`,
-      name: clip.name || `Animation ${index + 1}`,
+      const baseName = clip.name || `أنميشن ${index + 1}`;
+      const uniqueName = generateUniqueName(baseName, existingNames, '🎬 ');
+      existingNames.add(uniqueName);
+      
+      return {
+        id: `original_${index}_${Date.now()}`,
+        name: uniqueName,
       clip: clip.clone(),
       isImported: false
-    }));
+      };
+    });
 
     setRegistryItems(prev => {
       // Remove old original animations and add new ones
       const importedOnly = prev.filter(item => item.isImported);
       return [...originalItems, ...importedOnly];
     });
-  }, []);
+  }, [generateUniqueName]);
 
   const retargetAnimation = useCallback((
     sourceClip: THREE.AnimationClip,
@@ -201,14 +253,28 @@ export function useAnimationRegistry(): AnimationRegistry {
     imported: ImportedAnimation[],
     targetSkeleton?: THREE.Skeleton
   ) => {
+    // Get existing names to avoid conflicts
+    const existingNames = new Set(registryItems.map(item => item.name));
+    let conflictsResolved = 0;
+    
     const importedItems: AnimationRegistryItem[] = imported.map((anim, index) => {
       const retargetedClip = retargetAnimation(anim.clip, anim.sourceRoot, targetSkeleton);
-      // Ensure clip name matches registry item name to keep actions lookup consistent
-      retargetedClip.name = anim.name;
+      
+      // Generate unique name with Mixamo prefix
+      const originalName = anim.name;
+      const uniqueName = generateUniqueName(originalName, existingNames, '🎭 Mixamo: ', true);
+      
+      // Track conflicts for user notification
+      if (uniqueName !== `🎭 Mixamo: ${originalName}`) {
+        conflictsResolved++;
+      }
+      
+      existingNames.add(uniqueName);
+      retargetedClip.name = uniqueName;
       
       return {
         id: anim.id,
-        name: anim.name,
+        name: uniqueName,
         clip: retargetedClip,
         isImported: true,
         sourceType: anim.url.includes('fbx') ? 'FBX' : 'Mixamo'
@@ -220,17 +286,31 @@ export function useAnimationRegistry(): AnimationRegistry {
       const originalOnly = prev.filter(item => !item.isImported);
       return [...originalOnly, ...importedItems];
     });
-  }, [retargetAnimation]);
+    
+    // Notify user about conflict resolution
+    if (conflictsResolved > 0) {
+      toast.success(`تم حل ${conflictsResolved} تعارض في أسماء الأنميشن تلقائياً`);
+    }
+  }, [retargetAnimation, registryItems, generateUniqueName]);
 
   const renameAnimation = useCallback((id: string, newName: string): boolean => {
+    // Check for name conflicts before renaming
+    const existingNames = new Set(registryItems.filter(item => item.id !== id).map(item => item.name));
+    
+    if (existingNames.has(newName.trim())) {
+      toast.error('هذا الاسم مستخدم بالفعل، يرجى اختيار اسم آخر');
+      return false;
+    }
+    
     setRegistryItems(prev => {
       const item = prev.find(item => item.id === id);
       if (!item) return prev;
 
-      const updatedItem = { ...item, name: newName };
-      updatedItem.clip.name = newName; // Update the actual clip name
+      const trimmedName = newName.trim();
+      const updatedItem = { ...item, name: trimmedName };
+      updatedItem.clip.name = trimmedName; // Update the actual clip name
       
-      return prev.map(item => item.id === id ? updatedItem : item);
+      return prev.map(prevItem => prevItem.id === id ? updatedItem : prevItem);
     });
     return true;
   }, []);
