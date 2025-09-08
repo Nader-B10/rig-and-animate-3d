@@ -175,13 +175,13 @@ export const AnimationControls = ({
         <div className="space-y-3">
           <Label className="text-sm font-medium text-foreground">قائمة الأنميشن:</Label>
           <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto">
-            {animations.map((animName) => {
+            {animations.map((animName, idx) => {
               const isImported = importedAnimations.some(imported => imported.name === animName);
               const isActive = activeAnimation === animName;
               
               return (
                 <div
-                  key={animName}
+                  key={`${animName}-${idx}`}
                   className={`flex items-center gap-2 p-3 rounded-lg border transition-all ${
                     isActive ? 
                       'bg-primary/10 border-primary/20 shadow-lg' : 
