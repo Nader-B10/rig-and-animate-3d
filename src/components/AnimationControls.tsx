@@ -200,10 +200,10 @@ export const AnimationControls = ({
                       <div className={`w-2 h-2 rounded-full ${
                         isActive ? 'bg-primary animate-pulse' : 'bg-muted-foreground'
                       }`} />
-                      <span className="truncate">{animName}</span>
+                      <span className="truncate text-right" dir="rtl">{animName}</span>
                       {isImported && (
-                        <span className="text-xs bg-accent/20 text-accent-foreground px-1.5 py-0.5 rounded">
-                          Mixamo
+                        <span className="text-xs bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-purple-200 px-2 py-0.5 rounded-full border border-purple-500/30">
+                          مستورد
                         </span>
                       )}
                     </div>
