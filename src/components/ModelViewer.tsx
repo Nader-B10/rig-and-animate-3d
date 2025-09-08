@@ -30,12 +30,12 @@ interface ModelProps {
   onAnimationProgress: (progress: number, duration: number) => void;
   onSeekAnimation: (time: number) => void;
   onModelSceneReady?: (scene: THREE.Object3D, animations: THREE.AnimationClip[]) => void;
+  animationRegistry: any;
 }
 
-function Model({ url, fileType, onAnimationsFound, activeAnimation, isPlaying, importedAnimations, showSkeleton, animationProgress, onAnimationProgress, onSeekAnimation, onModelSceneReady }: ModelProps) {
+function Model({ url, fileType, onAnimationsFound, activeAnimation, isPlaying, importedAnimations, showSkeleton, animationProgress, onAnimationProgress, onSeekAnimation, onModelSceneReady, animationRegistry }: ModelProps) {
   const group = useRef<THREE.Group>(null);
   const { modelData, isLoading, error } = useModelLoader(url, fileType);
-  const animationRegistry = useAnimationRegistry();
   const [hasNotified, setHasNotified] = useState(false);
   const [targetSkeleton, setTargetSkeleton] = useState<THREE.Skeleton | null>(null);
   
@@ -73,7 +73,7 @@ function Model({ url, fileType, onAnimationsFound, activeAnimation, isPlaying, i
 
   // Add imported animations when they change
   useEffect(() => {
-    animationRegistry.addImportedAnimations(importedAnimations, targetSkeleton);
+    animationRegistry.addImportedAnimations(importedAnimations);
   }, [importedAnimations, targetSkeleton, animationRegistry]);
 
   // Get all clips from registry
@@ -214,7 +214,7 @@ export const ModelViewer = ({ modelUrl, fileType, onUpload, importedAnimations, 
       setAnimations([]);
       setActiveAnimation(null);
       setIsPlaying(false);
-      animationRegistry.clear();
+      animationRegistry.clearRegistry();
     }
   }, [modelUrl, animationRegistry]);
 
@@ -304,6 +304,7 @@ export const ModelViewer = ({ modelUrl, fileType, onUpload, importedAnimations, 
                 onAnimationProgress={onAnimationProgress}
                 onSeekAnimation={onSeekAnimation}
                 onModelSceneReady={onModelSceneReady}
+                animationRegistry={animationRegistry}
               />
               <OrbitControls
                 enablePan={true}
