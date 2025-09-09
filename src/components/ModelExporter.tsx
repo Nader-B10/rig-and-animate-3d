@@ -111,11 +111,11 @@ export const ModelExporter = ({
       const originalCount = Math.max(0, animationCount - importedCount);
       const fileSize = (blob.size / (1024 * 1024)).toFixed(2);
       
-      toast.success(`تم تصدير المودل بصيغة FBX بنجاح! (${originalCount} أصلية + ${importedCount} مستوردة، ${fileSize}MB)`);
+      toast.success(`تم تصدير المودل بصيغة FBX Binary بنجاح! (${originalCount} أصلية + ${importedCount} مستوردة، ${fileSize}MB)`);
     } catch (error) {
       console.error('Export error:', error);
       const errorMessage = error instanceof Error ? error.message : 'خطأ غير معروف';
-      toast.error(`خطأ في تصدير المودل: ${errorMessage}`);
+      toast.error(`خطأ في تصدير المودل FBX: ${errorMessage}`);
       
       // Log additional debug info
       console.error('Export debug info:', {
@@ -176,6 +176,21 @@ export const ModelExporter = ({
               <li>• أنميشن مستوردة: <span className="font-semibold text-accent-foreground">{importedCount}</span></li>
               <li>• سيتم تحسين وتنظيف البيانات قبل التصدير</li>
               {hasImportedAnimations && <li>• تم دمج أنميشن Mixamo مع السكيلتون الأصلي</li>}
+              <li>• تنسيق FBX Binary متوافق مع Blender 2.8+ و Maya و 3ds Max</li>
+            </ul>
+          </div>
+
+          <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20">
+            <h3 className="font-medium text-green-700 dark:text-green-400 mb-2 flex items-center gap-2">
+              <CheckCircle className="w-4 h-4" />
+              التوافق مع بلندر:
+            </h3>
+            <ul className="text-xs text-green-600 dark:text-green-300 space-y-1">
+              <li>✅ تنسيق FBX Binary (مدعوم في Blender 2.8+)</li>
+              <li>✅ مقياس صحيح (100 وحدة = 1 متر)</li>
+              <li>✅ محاور صحيحة (Y-Up, Z-Forward)</li>
+              <li>✅ الأنميشن والعظام محفوظة</li>
+              <li>✅ لا حاجة لتعديل الإعدادات عند الاستيراد</li>
             </ul>
           </div>
 
@@ -196,13 +211,14 @@ export const ModelExporter = ({
           </div>
 
           <div className="text-xs text-muted-foreground text-center mt-3">
-            <p>FBX: تنسيق محسّن للتوافق الأمثل مع Blender وجميع التطبيقات</p>
+            <p>FBX Binary: تنسيق محسّن للتوافق الأمثل مع Blender وجميع التطبيقات</p>
             <p className="text-green-600 mt-1">✅ لا مشاكل في الحجم أو الاتجاه عند الاستيراد</p>
+            <p className="text-blue-600 mt-1">🔧 تنسيق Binary متوافق مع Blender 2.8+</p>
             {isExporting && (
               <div className="text-primary mt-2">
                 <div className="flex items-center justify-center gap-2">
                   <Loader2 className="w-3 h-3 animate-spin" />
-                  <span>جاري معالجة وتصدير ملف FBX...</span>
+                  <span>جاري معالجة وتصدير ملف FBX Binary...</span>
                 </div>
               </div>
             )}

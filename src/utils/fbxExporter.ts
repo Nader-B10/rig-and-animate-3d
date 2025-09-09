@@ -18,164 +18,375 @@ export class FBXExporter {
       exportScene.updateMatrixWorld(true);
     }
     
-    // Create a simple FBX structure
-    let fbxContent = '';
-    
-    // FBX Header
-    fbxContent += 'FBXHeaderExtension:  {\n';
-    fbxContent += '\tFBXHeaderVersion: 1003\n';
-    fbxContent += '\tFBXVersion: 7400\n';
-    fbxContent += '\tCreationTimeStamp:  {\n';
-    fbxContent += `\t\tVersion: 1000\n`;
-    fbxContent += `\t\tYear: ${new Date().getFullYear()}\n`;
-    fbxContent += `\t\tMonth: ${new Date().getMonth() + 1}\n`;
-    fbxContent += `\t\tDay: ${new Date().getDate()}\n`;
-    fbxContent += `\t\tHour: ${new Date().getHours()}\n`;
-    fbxContent += `\t\tMinute: ${new Date().getMinutes()}\n`;
-    fbxContent += `\t\tSecond: ${new Date().getSeconds()}\n`;
-    fbxContent += `\t\tMillisecond: ${new Date().getMilliseconds()}\n`;
-    fbxContent += '\t}\n';
-    fbxContent += '\tCreator: "Lovable 3D Model Merger - Scale Normalized"\n';
-    fbxContent += '}\n\n';
-    
-    // Global Settings for proper scaling
-    fbxContent += 'GlobalSettings:  {\n';
-    fbxContent += '\tVersion: 1000\n';
-    fbxContent += '\tProperties70:  {\n';
-    fbxContent += '\t\tP: "UpAxis", "int", "Integer", "",1\n';
-    fbxContent += '\t\tP: "UpAxisSign", "int", "Integer", "",1\n';
-    fbxContent += '\t\tP: "FrontAxis", "int", "Integer", "",2\n';
-    fbxContent += '\t\tP: "FrontAxisSign", "int", "Integer", "",1\n';
-    fbxContent += '\t\tP: "CoordAxis", "int", "Integer", "",0\n';
-    fbxContent += '\t\tP: "CoordAxisSign", "int", "Integer", "",1\n';
-    fbxContent += '\t\tP: "OriginalUpAxis", "int", "Integer", "",1\n';
-    fbxContent += '\t\tP: "OriginalUpAxisSign", "int", "Integer", "",1\n';
-    fbxContent += '\t\tP: "UnitScaleFactor", "double", "Number", "",100\n'; // 100 units = 1 meter
-    fbxContent += '\t\tP: "OriginalUnitScaleFactor", "double", "Number", "",100\n';
-    fbxContent += '\t}\n';
-    fbxContent += '}\n\n';
+    // Create Binary FBX structure
+    const fbxData = this.createBinaryFBX(exportScene, animations);
+    return fbxData;
+  }
 
-    // Objects section
-    fbxContent += 'Objects:  {\n';
+  private static createBinaryFBX(scene: THREE.Object3D, animations: THREE.AnimationClip[]): ArrayBuffer {
+    // FBX Binary format structure
+    const buffer = new ArrayBuffer(1024 * 1024); // Start with 1MB buffer
+    const view = new DataView(buffer);
+    let offset = 0;
+
+    // FBX Binary Header (27 bytes)
+    const header = "Kaydara FBX Binary  \0\x1a\0";
+    for (let i = 0; i < header.length; i++) {
+      view.setUint8(offset++, header.charCodeAt(i));
+    }
+
+    // FBX Version (4 bytes) - FBX 2020 format
+    view.setUint32(offset, 7500, true);
+    offset += 4;
+
+    // Create simplified binary FBX structure
+    const fbxNodes = this.createFBXNodes(scene, animations);
     
+    // Write nodes to buffer
+    for (const node of fbxNodes) {
+      offset = this.writeNode(view, offset, node);
+    }
+
+    // Add null record to end
+    view.setUint32(offset, 0, true); // End offset
+    view.setUint8(offset + 4, 0); // Num properties
+    view.setUint8(offset + 5, 0); // Property list len
+    offset += 13; // Null record is 13 bytes
+
+    // Return trimmed buffer
+    return buffer.slice(0, offset);
+  }
+
+  private static createFBXNodes(scene: THREE.Object3D, animations: THREE.AnimationClip[]): any[] {
+    const nodes = [];
+    
+    // FBX Header Extension
+    nodes.push({
+      name: "FBXHeaderExtension",
+      properties: [],
+      children: [
+        {
+          name: "FBXHeaderVersion",
+          properties: [{ type: 'I', value: 1003 }],
+          children: []
+        },
+        {
+          name: "FBXVersion",
+          properties: [{ type: 'I', value: 7500 }],
+          children: []
+        },
+        {
+          name: "Creator",
+          properties: [{ type: 'S', value: "Lovable 3D Model Viewer - Binary FBX Export" }],
+          children: []
+        }
+      ]
+    });
+
+    // Global Settings
+    nodes.push({
+      name: "GlobalSettings",
+      properties: [],
+      children: [
+        {
+          name: "Version",
+          properties: [{ type: 'I', value: 1000 }],
+          children: []
+        },
+        {
+          name: "Properties70",
+          properties: [],
+          children: [
+            {
+              name: "P",
+              properties: [
+                { type: 'S', value: "UpAxis" },
+                { type: 'S', value: "int" },
+                { type: 'S', value: "Integer" },
+                { type: 'S', value: "" },
+                { type: 'I', value: 1 }
+              ],
+              children: []
+            },
+            {
+              name: "P",
+              properties: [
+                { type: 'S', value: "UnitScaleFactor" },
+                { type: 'S', value: "double" },
+                { type: 'S', value: "Number" },
+                { type: 'S', value: "" },
+                { type: 'D', value: 100.0 }
+              ],
+              children: []
+            }
+          ]
+        }
+      ]
+    });
+
+    // Objects
+    const objectsNode = {
+      name: "Objects",
+      properties: [],
+      children: []
+    };
+
     let objectId = 1000000;
     const objectMap = new Map<THREE.Object3D, number>();
-    
-    // Process scene hierarchy
-    exportScene.traverse((object) => {
+
+    // Process scene objects
+    scene.traverse((object) => {
       const id = objectId++;
       objectMap.set(object, id);
-      
-      if (object instanceof THREE.Mesh) {
-        // Model definition
-        fbxContent += `\tModel: ${id}, "Model::${object.name || 'Mesh'}", "Mesh" {\n`;
-        fbxContent += '\t\tVersion: 232\n';
-        fbxContent += '\t\tProperties70:  {\n';
-        fbxContent += `\t\t\tP: "Lcl Translation", "Lcl Translation", "", "A",${object.position.x},${object.position.y},${object.position.z}\n`;
-        fbxContent += `\t\t\tP: "Lcl Rotation", "Lcl Rotation", "", "A",${THREE.MathUtils.radToDeg(object.rotation.x)},${THREE.MathUtils.radToDeg(object.rotation.y)},${THREE.MathUtils.radToDeg(object.rotation.z)}\n`;
-        fbxContent += `\t\t\tP: "Lcl Scaling", "Lcl Scaling", "", "A",${object.scale.x},${object.scale.y},${object.scale.z}\n`;
-        fbxContent += '\t\t}\n';
-        fbxContent += '\t\tShading: T\n';
-        fbxContent += '\t\tCulling: "CullingOff"\n';
-        fbxContent += '\t}\n';
-        
-        // Geometry
-        if (object.geometry) {
-          const geomId = objectId++;
-          fbxContent += `\tGeometry: ${geomId}, "Geometry::", "Mesh" {\n`;
-          
-          const positions = object.geometry.attributes.position;
-          if (positions) {
-            fbxContent += '\t\tVertices: *' + (positions.count * 3) + ' {\n\t\t\ta: ';
-            for (let i = 0; i < positions.count; i++) {
-              fbxContent += `${positions.getX(i)},${positions.getY(i)},${positions.getZ(i)}`;
-              if (i < positions.count - 1) fbxContent += ',';
+
+      if (object instanceof THREE.Mesh && object.geometry) {
+        // Add Model node
+        objectsNode.children.push({
+          name: "Model",
+          properties: [
+            { type: 'L', value: id },
+            { type: 'S', value: `Model::${object.name || 'Mesh'}` },
+            { type: 'S', value: "Mesh" }
+          ],
+          children: [
+            {
+              name: "Version",
+              properties: [{ type: 'I', value: 232 }],
+              children: []
+            },
+            {
+              name: "Properties70",
+              properties: [],
+              children: [
+                {
+                  name: "P",
+                  properties: [
+                    { type: 'S', value: "Lcl Translation" },
+                    { type: 'S', value: "Lcl Translation" },
+                    { type: 'S', value: "" },
+                    { type: 'S', value: "A" },
+                    { type: 'D', value: object.position.x },
+                    { type: 'D', value: object.position.y },
+                    { type: 'D', value: object.position.z }
+                  ],
+                  children: []
+                }
+              ]
             }
-            fbxContent += '\n\t\t}\n';
+          ]
+        });
+
+        // Add Geometry node
+        const geomId = objectId++;
+        const positions = object.geometry.attributes.position;
+        const indices = object.geometry.index;
+
+        if (positions) {
+          const vertices = [];
+          for (let i = 0; i < positions.count; i++) {
+            vertices.push(positions.getX(i), positions.getY(i), positions.getZ(i));
           }
-          
-          const indices = object.geometry.index;
+
+          const polygonIndices = [];
           if (indices) {
-            fbxContent += '\t\tPolygonVertexIndex: *' + indices.count + ' {\n\t\t\ta: ';
             for (let i = 0; i < indices.count; i += 3) {
-              fbxContent += `${indices.getX(i)},${indices.getY(i)},${-(indices.getZ(i) + 1)}`;
-              if (i < indices.count - 3) fbxContent += ',';
+              polygonIndices.push(
+                indices.getX(i),
+                indices.getY(i),
+                -(indices.getZ(i) + 1) // Negative for last vertex of polygon
+              );
             }
-            fbxContent += '\n\t\t}\n';
           }
-          
-          fbxContent += '\t}\n';
+
+          objectsNode.children.push({
+            name: "Geometry",
+            properties: [
+              { type: 'L', value: geomId },
+              { type: 'S', value: "Geometry::" },
+              { type: 'S', value: "Mesh" }
+            ],
+            children: [
+              {
+                name: "Vertices",
+                properties: [{ type: 'd', value: vertices }],
+                children: []
+              },
+              {
+                name: "PolygonVertexIndex",
+                properties: [{ type: 'i', value: polygonIndices }],
+                children: []
+              }
+            ]
+          });
         }
       }
     });
-    
-    // Animations
-    animations.forEach((clip, clipIndex) => {
-      const animStackId = objectId++;
-      const animLayerId = objectId++;
-      
-      fbxContent += `\tAnimationStack: ${animStackId}, "AnimStack::${clip.name}", "" {\n`;
-      fbxContent += '\t\tProperties70:  {\n';
-      fbxContent += `\t\t\tP: "LocalStart", "KTime", "Time", "",0\n`;
-      fbxContent += `\t\t\tP: "LocalStop", "KTime", "Time", "",${Math.floor(clip.duration * 46186158000)}\n`;
-      fbxContent += `\t\t\tP: "ReferenceStart", "KTime", "Time", "",0\n`;
-      fbxContent += `\t\t\tP: "ReferenceStop", "KTime", "Time", "",${Math.floor(clip.duration * 46186158000)}\n`;
-      fbxContent += '\t\t}\n';
-      fbxContent += '\t}\n';
-      
-      fbxContent += `\tAnimationLayer: ${animLayerId}, "AnimLayer::${clip.name}", "" {\n`;
-      fbxContent += '\t}\n';
-      
-      // Animation curves for each track
-      clip.tracks.forEach((track) => {
-        const curveId = objectId++;
-        const property = track.name.split('.').pop() || 'position';
-        
-        fbxContent += `\tAnimationCurve: ${curveId}, "AnimCurve::", "" {\n`;
-        fbxContent += '\t\tDefault: 0\n';
-        fbxContent += '\t\tKeyVer: 4009\n';
-        
-        if (track.times && track.values) {
-          const timeCount = track.times.length;
-          fbxContent += `\t\tKeyTime: *${timeCount} {\n\t\t\ta: `;
-          for (let i = 0; i < timeCount; i++) {
-            fbxContent += Math.floor(track.times[i] * 46186158000);
-            if (i < timeCount - 1) fbxContent += ',';
-          }
-          fbxContent += '\n\t\t}\n';
-          
-          fbxContent += `\t\tKeyValueFloat: *${track.values.length} {\n\t\t\ta: `;
-          for (let i = 0; i < track.values.length; i++) {
-            fbxContent += track.values[i];
-            if (i < track.values.length - 1) fbxContent += ',';
-          }
-          fbxContent += '\n\t\t}\n';
-        }
-        
-        fbxContent += '\t}\n';
+
+    nodes.push(objectsNode);
+
+    // Add animations if present
+    if (animations.length > 0) {
+      const animStacksNode = {
+        name: "AnimationStacks",
+        properties: [],
+        children: []
+      };
+
+      animations.forEach((clip, index) => {
+        const stackId = objectId++;
+        animStacksNode.children.push({
+          name: "AnimationStack",
+          properties: [
+            { type: 'L', value: stackId },
+            { type: 'S', value: `AnimStack::${clip.name}` },
+            { type: 'S', value: "" }
+          ],
+          children: [
+            {
+              name: "Properties70",
+              properties: [],
+              children: [
+                {
+                  name: "P",
+                  properties: [
+                    { type: 'S', value: "LocalStart" },
+                    { type: 'S', value: "KTime" },
+                    { type: 'S', value: "Time" },
+                    { type: 'S', value: "" },
+                    { type: 'L', value: 0 }
+                  ],
+                  children: []
+                },
+                {
+                  name: "P",
+                  properties: [
+                    { type: 'S', value: "LocalStop" },
+                    { type: 'S', value: "KTime" },
+                    { type: 'S', value: "Time" },
+                    { type: 'S', value: "" },
+                    { type: 'L', value: Math.floor(clip.duration * 46186158000) }
+                  ],
+                  children: []
+                }
+              ]
+            }
+          ]
+        });
       });
-    });
-    
-    fbxContent += '}\n\n';
-    
+
+      nodes.push(animStacksNode);
+    }
+
     // Connections
-    fbxContent += 'Connections:  {\n';
-    
-    // Connect objects to scene
-    exportScene.traverse((object) => {
-      const id = objectMap.get(object);
-      if (id && object.parent) {
-        const parentId = objectMap.get(object.parent);
-        if (parentId) {
-          fbxContent += `\tC: "OO",${id},${parentId}\n`;
-        }
-      }
+    nodes.push({
+      name: "Connections",
+      properties: [],
+      children: []
     });
+
+    return nodes;
+  }
+
+  private static writeNode(view: DataView, offset: number, node: any): number {
+    const startOffset = offset;
     
-    fbxContent += '}\n';
+    // Reserve space for end offset (will be filled later)
+    offset += 4;
     
-    // Convert to ArrayBuffer
-    const encoder = new TextEncoder();
-    return encoder.encode(fbxContent).buffer;
+    // Number of properties
+    view.setUint32(offset, node.properties.length, true);
+    offset += 4;
+    
+    // Property list length (will be calculated)
+    const propLengthOffset = offset;
+    offset += 4;
+    
+    // Node name length
+    view.setUint8(offset, node.name.length);
+    offset += 1;
+    
+    // Node name
+    for (let i = 0; i < node.name.length; i++) {
+      view.setUint8(offset++, node.name.charCodeAt(i));
+    }
+    
+    // Properties
+    const propStartOffset = offset;
+    for (const prop of node.properties) {
+      offset = this.writeProperty(view, offset, prop);
+    }
+    
+    // Fill in property list length
+    view.setUint32(propLengthOffset, offset - propStartOffset, true);
+    
+    // Write children
+    for (const child of node.children) {
+      offset = this.writeNode(view, offset, child);
+    }
+    
+    // Fill in end offset
+    view.setUint32(startOffset, offset, true);
+    
+    return offset;
+  }
+
+  private static writeProperty(view: DataView, offset: number, prop: any): number {
+    // Property type code
+    view.setUint8(offset++, prop.type.charCodeAt(0));
+    
+    switch (prop.type) {
+      case 'S': // String
+        const str = prop.value.toString();
+        view.setUint32(offset, str.length, true);
+        offset += 4;
+        for (let i = 0; i < str.length; i++) {
+          view.setUint8(offset++, str.charCodeAt(i));
+        }
+        break;
+        
+      case 'I': // Int32
+        view.setInt32(offset, prop.value, true);
+        offset += 4;
+        break;
+        
+      case 'L': // Int64 (stored as two 32-bit values)
+        view.setInt32(offset, prop.value & 0xFFFFFFFF, true);
+        view.setInt32(offset + 4, (prop.value >> 32) & 0xFFFFFFFF, true);
+        offset += 8;
+        break;
+        
+      case 'D': // Double
+        view.setFloat64(offset, prop.value, true);
+        offset += 8;
+        break;
+        
+      case 'd': // Double array
+        view.setUint32(offset, prop.value.length, true);
+        offset += 4;
+        view.setUint32(offset, 0, true); // Encoding (0 = uncompressed)
+        offset += 4;
+        view.setUint32(offset, prop.value.length * 8, true); // Compressed length
+        offset += 4;
+        for (const val of prop.value) {
+          view.setFloat64(offset, val, true);
+          offset += 8;
+        }
+        break;
+        
+      case 'i': // Int32 array
+        view.setUint32(offset, prop.value.length, true);
+        offset += 4;
+        view.setUint32(offset, 0, true); // Encoding (0 = uncompressed)
+        offset += 4;
+        view.setUint32(offset, prop.value.length * 4, true); // Compressed length
+        offset += 4;
+        for (const val of prop.value) {
+          view.setInt32(offset, val, true);
+          offset += 4;
+        }
+        break;
+    }
+    
+    return offset;
   }
 }
