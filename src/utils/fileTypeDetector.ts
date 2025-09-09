@@ -1,11 +1,7 @@
-export function detectFileType(filename: string): 'gltf' | 'glb' | 'fbx' | null {
+export function detectFileType(filename: string): 'fbx' | null {
   const extension = filename.toLowerCase().split('.').pop();
   
   switch (extension) {
-    case 'gltf':
-      return 'gltf';
-    case 'glb':
-      return 'glb';
     case 'fbx':
       return 'fbx';
     default:

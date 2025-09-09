@@ -1,5 +1,4 @@
 import { useCallback, useState } from 'react';
-import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Download, Package, Loader2, AlertTriangle, CheckCircle } from 'lucide-react';
@@ -8,6 +7,7 @@ import * as THREE from 'three';
 import { ExportValidator } from '@/utils/exportValidator';
 import { SceneProcessor } from '@/utils/sceneProcessor';
 import { ModelOptimizer } from '@/utils/modelOptimizer';
+import { FBXExporter } from '@/utils/fbxExporter';
 
 interface ImportedAnimation {
   id: string;
@@ -32,7 +32,7 @@ export const ModelExporter = ({
 }: ModelExporterProps) => {
   const [isExporting, setIsExporting] = useState(false);
   
-  const exportModel = useCallback(async (format: 'glb' | 'gltf') => {
+  const exportModel = useCallback(async () => {
     if (!modelScene || !modelUrl) {
       toast.error('لا يوجد مودل للتصدير');
       return;
@@ -78,59 +78,13 @@ export const ModelExporter = ({
       // Optimize animations
       const optimizedAnimations = ModelOptimizer.optimizeAnimations(exportAnimations);
       
-      console.log(`Exporting ${optimizedAnimations.length} animations with ${exportScene.children.length} scene objects`);
+      console.log(`Exporting ${optimizedAnimations.length} animations with ${exportScene.children.length} scene objects to FBX`);
       
-      const exporter = new GLTFExporter();
+      // Use our custom FBX exporter
+      const result = FBXExporter.export(exportScene, optimizedAnimations);
       
-      const options = {
-        binary: format === 'glb',
-        animations: optimizedAnimations,
-        includeCustomExtensions: false, // Changed to false for better compatibility
-        truncateDrawRange: true,
-        embedImages: true,
-        maxTextureSize: 1024, // Reduced for better compatibility
-        onlyVisible: false,
-        forceIndices: true, // Changed to true for better compatibility
-        forcePowerOfTwoTextures: true // Changed to true for better compatibility
-      };
-
-      const result = await new Promise<ArrayBuffer | any>((resolve, reject) => {
-        try {
-          exporter.parse(
-            exportScene,
-            (gltf) => {
-              console.log('Export successful');
-              resolve(gltf);
-            },
-            (error) => {
-              console.error('Export error:', error);
-              reject(error);
-            },
-            options
-          );
-        } catch (error) {
-          console.error('Exporter parse error:', error);
-          reject(error);
-        }
-      });
-
-      let blob: Blob;
-      let filename: string;
-      
-      if (format === 'glb') {
-        if (!(result instanceof ArrayBuffer)) {
-          throw new Error('GLB export should return ArrayBuffer');
-        }
-        blob = new Blob([result], { type: 'model/gltf-binary' });
-        filename = `model_${Date.now()}.glb`;
-      } else {
-        if (typeof result !== 'object') {
-          throw new Error('GLTF export should return object');
-        }
-        const jsonString = JSON.stringify(result, null, 2);
-        blob = new Blob([jsonString], { type: 'model/gltf+json' });
-        filename = `model_${Date.now()}.gltf`;
-      }
+      const blob = new Blob([result], { type: 'application/octet-stream' });
+      const filename = `model_${Date.now()}.fbx`;
       
       // Validate blob before download
       if (blob.size === 0) {
@@ -157,7 +111,7 @@ export const ModelExporter = ({
       const originalCount = Math.max(0, animationCount - importedCount);
       const fileSize = (blob.size / (1024 * 1024)).toFixed(2);
       
-      toast.success(`تم تصدير المودل بنجاح! (${originalCount} أصلية + ${importedCount} مستوردة، ${fileSize}MB)`);
+      toast.success(`تم تصدير المودل بصيغة FBX بنجاح! (${originalCount} أصلية + ${importedCount} مستوردة، ${fileSize}MB)`);
     } catch (error) {
       console.error('Export error:', error);
       const errorMessage = error instanceof Error ? error.message : 'خطأ غير معروف';
@@ -225,45 +179,30 @@ export const ModelExporter = ({
             </ul>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="w-full">
             <Button
-              onClick={() => exportModel('glb')}
-              className="gradient-primary text-white shadow-glow"
-              size="sm"
+              onClick={exportModel}
+              className="w-full gradient-primary text-white shadow-glow"
+              size="lg"
               disabled={isExporting}
             >
               {isExporting ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
               ) : (
-                <Download className="w-4 h-4 mr-2" />
+                <Download className="w-5 h-5 mr-2" />
               )}
-              تصدير GLB
-            </Button>
-            
-            <Button
-              onClick={() => exportModel('gltf')}
-              variant="outline"
-              className="bg-secondary/10 border-secondary/20 text-secondary-foreground hover:bg-secondary/20"
-              size="sm"
-              disabled={isExporting}
-            >
-              {isExporting ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <Download className="w-4 h-4 mr-2" />
-              )}
-              تصدير GLTF
+              تصدير FBX
             </Button>
           </div>
 
           <div className="text-xs text-muted-foreground text-center mt-3">
-            <p>GLB: ملف واحد مضغوط محسّن | GLTF: ملف JSON منظم</p>
-            <p className="text-accent-foreground mt-1">تم تحسين الملفات للتوافق الأمثل مع جميع التطبيقات</p>
+            <p>FBX: تنسيق محسّن للتوافق الأمثل مع Blender وجميع التطبيقات</p>
+            <p className="text-green-600 mt-1">✅ لا مشاكل في الحجم أو الاتجاه عند الاستيراد</p>
             {isExporting && (
               <div className="text-primary mt-2">
                 <div className="flex items-center justify-center gap-2">
                   <Loader2 className="w-3 h-3 animate-spin" />
-                  <span>جاري معالجة وتصدير الملف...</span>
+                  <span>جاري معالجة وتصدير ملف FBX...</span>
                 </div>
               </div>
             )}

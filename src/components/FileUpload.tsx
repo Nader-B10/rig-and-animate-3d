@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/card';
 import { toast } from 'sonner';
 
 interface FileUploadProps {
-  onFileSelect: (url: string, fileType: 'gltf' | 'glb' | 'fbx') => void;
+  onFileSelect: (url: string, fileType: 'fbx') => void;
   className?: string;
   multiple?: boolean;
 }
@@ -18,8 +18,8 @@ export const FileUpload = ({ onFileSelect, className, multiple = false }: FileUp
     acceptedFiles.forEach((file) => {
       const fileExtension = file.name.toLowerCase().split('.').pop();
       
-      if (!fileExtension || !['gltf', 'glb', 'fbx'].includes(fileExtension)) {
-        toast.error(`نوع الملف غير مدعوم: ${file.name}. يرجى رفع ملف GLB أو GLTF أو FBX`);
+      if (!fileExtension || fileExtension !== 'fbx') {
+        toast.error(`نوع الملف غير مدعوم: ${file.name}. يرجى رفع ملف FBX فقط`);
         return;
       }
 
@@ -30,8 +30,7 @@ export const FileUpload = ({ onFileSelect, className, multiple = false }: FileUp
       }
 
       const url = URL.createObjectURL(file);
-      const fileType = fileExtension as 'gltf' | 'glb' | 'fbx';
-      onFileSelect(url, fileType);
+      onFileSelect(url, 'fbx');
     });
     
     toast.success(`تم رفع ${acceptedFiles.length} ملف${acceptedFiles.length > 1 ? '' : ''}`);
@@ -40,8 +39,6 @@ export const FileUpload = ({ onFileSelect, className, multiple = false }: FileUp
   const { getRootProps, getInputProps, isDragActive, isDragReject } = useDropzone({
     onDrop,
     accept: {
-      'model/gltf-binary': ['.glb'],
-      'model/gltf+json': ['.gltf'],
       'application/octet-stream': ['.fbx'],
     },
     multiple: multiple,
@@ -79,15 +76,15 @@ export const FileUpload = ({ onFileSelect, className, multiple = false }: FileUp
         </div>
         
         <h3 className="text-lg font-semibold text-foreground mb-2">
-          {isDragActive ? 'أفلت الملف هنا...' : 'ارفع مودل ثلاثي الأبعاد'}
+          {isDragActive ? 'أفلت الملف هنا...' : 'ارفع مودل FBX'}
         </h3>
         
         <p className="text-muted-foreground mb-4">
           {isDragReject 
-            ? 'نوع الملف غير مدعوم'
+            ? 'نوع الملف غير مدعوم - يجب أن يكون FBX'
             : multiple
-            ? 'اسحب وأفلت ملفات GLB أو GLTF أو FBX هنا، أو انقر للاختيار (يمكن اختيار عدة ملفات)'
-            : 'اسحب وأفلت ملف GLB أو GLTF أو FBX هنا، أو انقر للاختيار'
+            ? 'اسحب وأفلت ملفات FBX هنا، أو انقر للاختيار (يمكن اختيار عدة ملفات)'
+            : 'اسحب وأفلت ملف FBX هنا، أو انقر للاختيار'
           }
         </p>
         
@@ -103,8 +100,9 @@ export const FileUpload = ({ onFileSelect, className, multiple = false }: FileUp
         )}
         
         <div className="mt-4 text-xs text-muted-foreground">
-          <p>الأنواع المدعومة: GLB, GLTF, FBX</p>
+          <p>النوع المدعوم: FBX فقط</p>
           <p>الحد الأقصى: 100MB</p>
+          <p className="text-yellow-600 mt-1">⚠️ للحصول على أفضل النتائج، استخدم FBX فقط للمودل والأنميشن</p>
         </div>
       </div>
     </Card>

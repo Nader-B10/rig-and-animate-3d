@@ -9,12 +9,12 @@ interface ModelData {
   animations: THREE.AnimationClip[];
 }
 
-export function useModelLoader(url: string | null, fileType: 'gltf' | 'glb' | 'fbx' | null) {
+export function useModelLoader(url: string | null, fileType: 'fbx' | null) {
   const [modelData, setModelData] = useState<ModelData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loadModel = useCallback(async (modelUrl: string, type: 'gltf' | 'glb' | 'fbx') => {
+  const loadModel = useCallback(async (modelUrl: string, type: 'fbx') => {
     setIsLoading(true);
     setError(null);
     
@@ -22,66 +22,51 @@ export function useModelLoader(url: string | null, fileType: 'gltf' | 'glb' | 'f
       let scene: THREE.Object3D;
       let animations: THREE.AnimationClip[] = [];
       
-      if (type === 'fbx') {
-        const loader = new FBXLoader();
-        const fbx = await new Promise<THREE.Group>((resolve, reject) => {
-          loader.load(
-            modelUrl,
-            (object) => {
-              // Fix common FBX loading issues
-              object.traverse((child) => {
-                if (child instanceof THREE.Mesh) {
-                  // Ensure materials are properly set
-                  if (!child.material) {
-                    child.material = new THREE.MeshStandardMaterial({ color: 0x888888 });
-                  }
-                  // Fix bone references if they exist
-                  if ((child as any).skeleton) {
-                    (child as any).skeleton.bones.forEach((bone: THREE.Bone) => {
-                      if (bone) {
-                        bone.matrixAutoUpdate = true;
-                      }
-                    });
-                  }
+      const loader = new FBXLoader();
+      const fbx = await new Promise<THREE.Group>((resolve, reject) => {
+        loader.load(
+          modelUrl,
+          (object) => {
+            // Fix common FBX loading issues and ensure proper scaling
+            object.traverse((child) => {
+              if (child instanceof THREE.Mesh) {
+                // Ensure materials are properly set
+                if (!child.material) {
+                  child.material = new THREE.MeshStandardMaterial({ color: 0x888888 });
                 }
-              });
-              resolve(object);
-            },
-            undefined,
-            reject
-          );
-        });
-        
-        // Scale FBX models appropriately
-        fbx.scale.setScalar(0.01);
-        scene = fbx;
-        animations = fbx.animations || [];
-      } else {
-        const loader = new GLTFLoader();
-        const gltf = await new Promise<any>((resolve, reject) => {
-          loader.load(
-            modelUrl,
-            (gltf) => {
-              // Fix GLTF bone issues
-              gltf.scene.traverse((child: THREE.Object3D) => {
-                if (child instanceof THREE.Mesh && (child as any).skeleton) {
+                // Fix bone references if they exist
+                if ((child as any).skeleton) {
                   (child as any).skeleton.bones.forEach((bone: THREE.Bone) => {
                     if (bone) {
                       bone.matrixAutoUpdate = true;
                     }
                   });
                 }
-              });
-              resolve(gltf);
-            },
-            undefined,
-            reject
-          );
-        });
-        
-        scene = gltf.scene;
-        animations = gltf.animations || [];
+              }
+            });
+            resolve(object);
+          },
+          undefined,
+          reject
+        );
+      });
+      
+      // Apply consistent scaling for FBX models to prevent size issues
+      const boundingBox = new THREE.Box3().setFromObject(fbx);
+      const size = boundingBox.getSize(new THREE.Vector3());
+      const maxDimension = Math.max(size.x, size.y, size.z);
+      
+      // Scale to a reasonable size (around 2 units max dimension)
+      if (maxDimension > 10) {
+        const scale = 2 / maxDimension;
+        fbx.scale.setScalar(scale);
+      } else if (maxDimension < 0.1) {
+        // If too small, scale up
+        fbx.scale.setScalar(10);
       }
+      
+      scene = fbx;
+      animations = fbx.animations || [];
       
       // Ensure scene is properly configured
       scene.traverse((child) => {

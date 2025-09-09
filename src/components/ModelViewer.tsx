@@ -20,7 +20,7 @@ interface ImportedAnimation {
 
 interface ModelProps {
   url: string;
-  fileType: 'gltf' | 'glb' | 'fbx';
+  fileType: 'fbx';
   onAnimationsFound: (animations: string[]) => void;
   activeAnimation: string | null;
   isPlaying: boolean;
@@ -193,7 +193,7 @@ function Model({ url, fileType, onAnimationsFound, activeAnimation, isPlaying, i
 
 interface ModelViewerProps {
   modelUrl: string | null;
-  fileType: 'gltf' | 'glb' | 'fbx' | null;
+  fileType: 'fbx' | null;
   onUpload: () => void;
   importedAnimations: ImportedAnimation[];
   onModelSceneReady?: (scene: THREE.Object3D, animations: THREE.AnimationClip[]) => void;
@@ -339,7 +339,7 @@ export const ModelViewer = ({ modelUrl, fileType, onUpload, importedAnimations, 
                 ارفع مودل ثلاثي الأبعاد
               </h3>
               <p className="text-muted-foreground mb-4">
-                ادعم ملفات GLB و GLTF و FBX مع الأنميشن
+                ادعم ملفات FBX مع الأنميشن - تجنب مشاكل الحجم والاتجاه
               </p>
               <Button onClick={onUpload} className="gradient-primary text-white shadow-glow">
                 <Upload className="w-4 h-4 mr-2" />

@@ -19,7 +19,7 @@ interface ImportedAnimation {
 
 const Index = () => {
   const [modelUrl, setModelUrl] = useState<string | null>(null);
-  const [fileType, setFileType] = useState<'gltf' | 'glb' | 'fbx' | null>(null);
+  const [fileType, setFileType] = useState<'fbx' | null>(null);
   const [showUpload, setShowUpload] = useState(false);
   const [importedAnimations, setImportedAnimations] = useState<ImportedAnimation[]>([]);
   const [modelScene, setModelScene] = useState<THREE.Object3D | null>(null);
@@ -37,7 +37,7 @@ const Index = () => {
     };
   }, []);
 
-  const handleFileSelect = useCallback((url: string, type: 'gltf' | 'glb' | 'fbx') => {
+  const handleFileSelect = useCallback((url: string, type: 'fbx') => {
     // Clean up previous model URL
     if (modelUrl) {
       URL.revokeObjectURL(modelUrl);
