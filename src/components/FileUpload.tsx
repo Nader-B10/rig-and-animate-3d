@@ -102,7 +102,8 @@ export const FileUpload = ({ onFileSelect, className, multiple = false }: FileUp
         <div className="mt-4 text-xs text-muted-foreground">
           <p>النوع المدعوم: FBX فقط</p>
           <p>الحد الأقصى: 100MB</p>
-          <p className="text-yellow-600 mt-1">⚠️ للحصول على أفضل النتائج، استخدم FBX فقط للمودل والأنميشن</p>
+          <p className="text-blue-600 mt-1">💡 يمكنك الآن تجربة العارض حتى بدون رفع ملف!</p>
+          <p className="text-yellow-600 mt-1">⚠️ للحصول على أفضل النتائج، استخدم FBX للمودل والأنميشن</p>
         </div>
       </div>
     </Card>
