@@ -425,7 +425,7 @@ export class FBXExporter {
                     { type: 'S', value: "Lcl Translation" },
                     { type: 'S', value: "Vector3D" },
                     { type: 'S', value: "" },
-                    { type: 'S', value: "" },
+                    { type: 'S', value: "d" },
                     { type: 'd', value: [object.position.x, object.position.y, object.position.z] }
                   ],
                   children: []
@@ -436,7 +436,7 @@ export class FBXExporter {
                     { type: 'S', value: "Lcl Rotation" },
                     { type: 'S', value: "Vector3D" },
                     { type: 'S', value: "" },
-                    { type: 'S', value: "" },
+                    { type: 'S', value: "d" },
                     { type: 'd', value: [
                       THREE.MathUtils.radToDeg(object.rotation.x),
                       THREE.MathUtils.radToDeg(object.rotation.y),
@@ -451,7 +451,7 @@ export class FBXExporter {
                     { type: 'S', value: "Lcl Scaling" },
                     { type: 'S', value: "Vector3D" },
                     { type: 'S', value: "" },
-                    { type: 'S', value: "" },
+                    { type: 'S', value: "d" },
                     { type: 'd', value: [object.scale.x, object.scale.y, object.scale.z] }
                   ],
                   children: []
