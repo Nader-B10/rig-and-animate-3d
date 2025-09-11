@@ -10,30 +10,6 @@ import { Button } from '@/components/ui/button';
 import { Upload } from 'lucide-react';
 import { toast } from 'sonner';
 
-// Default scene with a simple cube for demonstration
-function DefaultScene() {
-  return (
-    <group>
-      <mesh position={[0, 0, 0]}>
-        <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial color="#8B5CF6" />
-      </mesh>
-      <mesh position={[2, 0, 0]}>
-        <sphereGeometry args={[0.5, 32, 32]} />
-        <meshStandardMaterial color="#06B6D4" />
-      </mesh>
-      <mesh position={[-2, 0, 0]}>
-        <cylinderGeometry args={[0.5, 0.5, 1, 32]} />
-        <meshStandardMaterial color="#10B981" />
-      </mesh>
-      <mesh position={[0, -1, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[10, 10]} />
-        <meshStandardMaterial color="#374151" />
-      </mesh>
-    </group>
-  );
-}
-
 interface ImportedAnimation {
   id: string;
   name: string;
@@ -44,7 +20,7 @@ interface ImportedAnimation {
 
 interface ModelProps {
   url: string;
-  fileType: 'fbx';
+  fileType: 'gltf' | 'glb' | 'fbx';
   onAnimationsFound: (animations: string[]) => void;
   activeAnimation: string | null;
   isPlaying: boolean;
@@ -217,7 +193,7 @@ function Model({ url, fileType, onAnimationsFound, activeAnimation, isPlaying, i
 
 interface ModelViewerProps {
   modelUrl: string | null;
-  fileType: 'fbx' | null;
+  fileType: 'gltf' | 'glb' | 'fbx' | null;
   onUpload: () => void;
   importedAnimations: ImportedAnimation[];
   onModelSceneReady?: (scene: THREE.Object3D, animations: THREE.AnimationClip[]) => void;
@@ -295,28 +271,27 @@ export const ModelViewer = ({ modelUrl, fileType, onUpload, importedAnimations, 
     <div className="w-full h-full flex flex-col">
       {/* 3D Viewer - Square aspect ratio */}
       <div className="aspect-square relative bg-gradient-card rounded-xl shadow-card-custom border border-border overflow-hidden">
-        <Canvas
-          shadows
-          camera={cameraSettings}
-          className="w-full h-full"
-          gl={{ 
-            antialias: true,
-            alpha: true,
-            powerPreference: "high-performance"
-          }}
-          performance={{ min: 0.5 }}
-        >
-          <ambientLight intensity={0.5} />
-          <directionalLight
-            position={[10, 10, 5]}
-            intensity={1}
-            castShadow
-            shadow-mapSize-width={1024}
-            shadow-mapSize-height={1024}
-          />
-          
-          {modelUrl && fileType ? (
-            <>
+        {modelUrl && fileType ? (
+          <>
+            <Canvas
+              shadows
+              camera={cameraSettings}
+              className="w-full h-full"
+              gl={{ 
+                antialias: true,
+                alpha: true,
+                powerPreference: "high-performance"
+              }}
+              performance={{ min: 0.5 }}
+            >
+              <ambientLight intensity={0.5} />
+              <directionalLight
+                position={[10, 10, 5]}
+                intensity={1}
+                castShadow
+                shadow-mapSize-width={1024}
+                shadow-mapSize-height={1024}
+              />
               <Model
                 url={modelUrl}
                 fileType={fileType}
@@ -331,38 +306,31 @@ export const ModelViewer = ({ modelUrl, fileType, onUpload, importedAnimations, 
                 onModelSceneReady={onModelSceneReady}
                 animationRegistry={animationRegistry}
               />
-            </>
-          ) : (
-            <DefaultScene />
-          )}
-          
-          <OrbitControls
-            enablePan={true}
-            enableZoom={true}
-            enableRotate={true}
-            minDistance={2}
-            maxDistance={20}
-            enableDamping={true}
-            dampingFactor={0.05}
-          />
-          <Environment preset="studio" />
-          <ContactShadows
-            position={[0, -1, 0]}
-            opacity={0.4}
-            scale={10}
-            blur={2}
-            far={4}
-          />
-        </Canvas>
-        
-        <div className="absolute top-4 left-4 bg-black/20 backdrop-blur-sm rounded-lg px-3 py-2">
-          <p className="text-white text-sm">
-            {modelUrl ? 'العارض ثلاثي الأبعاد' : 'العارض التجريبي - ارفع مودل للبدء'}
-          </p>
-        </div>
-        
-        {!modelUrl && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/10">
+              <OrbitControls
+                enablePan={true}
+                enableZoom={true}
+                enableRotate={true}
+                minDistance={2}
+                maxDistance={20}
+                enableDamping={true}
+                dampingFactor={0.05}
+              />
+              <Environment preset="studio" />
+              <ContactShadows
+                position={[0, -1, 0]}
+                opacity={0.4}
+                scale={10}
+                blur={2}
+                far={4}
+              />
+            </Canvas>
+            
+            <div className="absolute top-4 left-4 bg-black/20 backdrop-blur-sm rounded-lg px-3 py-2">
+              <p className="text-white text-sm">العارض ثلاثي الأبعاد</p>
+            </div>
+          </>
+        ) : (
+          <div className="flex items-center justify-center h-full">
             <div className="text-center">
               <div className="w-24 h-24 mx-auto mb-4 rounded-full gradient-hero flex items-center justify-center animate-float">
                 <Upload className="w-12 h-12 text-white" />
@@ -371,7 +339,7 @@ export const ModelViewer = ({ modelUrl, fileType, onUpload, importedAnimations, 
                 ارفع مودل ثلاثي الأبعاد
               </h3>
               <p className="text-muted-foreground mb-4">
-                ادعم ملفات FBX مع الأنميشن - تجنب مشاكل الحجم والاتجاه
+                ادعم ملفات GLB و GLTF و FBX مع الأنميشن
               </p>
               <Button onClick={onUpload} className="gradient-primary text-white shadow-glow">
                 <Upload className="w-4 h-4 mr-2" />

@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Download, Package, Loader2, AlertTriangle, CheckCircle } from 'lucide-react';
@@ -7,7 +8,6 @@ import * as THREE from 'three';
 import { ExportValidator } from '@/utils/exportValidator';
 import { SceneProcessor } from '@/utils/sceneProcessor';
 import { ModelOptimizer } from '@/utils/modelOptimizer';
-import { FBXExporter } from '@/utils/fbxExporter';
 
 interface ImportedAnimation {
   id: string;
@@ -32,7 +32,7 @@ export const ModelExporter = ({
 }: ModelExporterProps) => {
   const [isExporting, setIsExporting] = useState(false);
   
-  const exportModel = useCallback(async () => {
+  const exportModel = useCallback(async (format: 'glb' | 'gltf') => {
     if (!modelScene || !modelUrl) {
       toast.error('لا يوجد مودل للتصدير');
       return;
@@ -78,61 +78,90 @@ export const ModelExporter = ({
       // Optimize animations
       const optimizedAnimations = ModelOptimizer.optimizeAnimations(exportAnimations);
       
-      console.log(`Exporting ${optimizedAnimations.length} animations with ${exportScene.children.length} scene objects to FBX`);
+      console.log(`Exporting ${optimizedAnimations.length} animations with ${exportScene.children.length} scene objects`);
       
-      // Use our custom FBX exporter
-      try {
-        const result = FBXExporter.export(exportScene, optimizedAnimations);
-        
-        // Validate the result
-        if (!result || result.byteLength === 0) {
-          throw new Error('فشل في إنشاء ملف FBX - الملف فارغ');
+      const exporter = new GLTFExporter();
+      
+      const options = {
+        binary: format === 'glb',
+        animations: optimizedAnimations,
+        includeCustomExtensions: false, // Changed to false for better compatibility
+        truncateDrawRange: true,
+        embedImages: true,
+        maxTextureSize: 1024, // Reduced for better compatibility
+        onlyVisible: false,
+        forceIndices: true, // Changed to true for better compatibility
+        forcePowerOfTwoTextures: true // Changed to true for better compatibility
+      };
+
+      const result = await new Promise<ArrayBuffer | any>((resolve, reject) => {
+        try {
+          exporter.parse(
+            exportScene,
+            (gltf) => {
+              console.log('Export successful');
+              resolve(gltf);
+            },
+            (error) => {
+              console.error('Export error:', error);
+              reject(error);
+            },
+            options
+          );
+        } catch (error) {
+          console.error('Exporter parse error:', error);
+          reject(error);
         }
-        
-        if (result.byteLength < 1000) {
-          throw new Error('ملف FBX صغير جداً - قد يكون معطل');
+      });
+
+      let blob: Blob;
+      let filename: string;
+      
+      if (format === 'glb') {
+        if (!(result instanceof ArrayBuffer)) {
+          throw new Error('GLB export should return ArrayBuffer');
         }
-        
-        console.log(`FBX export successful: ${result.byteLength} bytes`);
-      
-        const blob = new Blob([result], { type: 'application/octet-stream' });
-        const filename = `model_${Date.now()}.fbx`;
-      
-        // Validate blob before download
-        if (blob.size === 0) {
-          throw new Error('العملية نتجت عنها ملف فارغ');
+        blob = new Blob([result], { type: 'model/gltf-binary' });
+        filename = `model_${Date.now()}.glb`;
+      } else {
+        if (typeof result !== 'object') {
+          throw new Error('GLTF export should return object');
         }
-      
-        console.log(`Export blob created: ${blob.size} bytes, type: ${blob.type}`);
-      
-        // Download file
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = filename;
-        link.style.display = 'none';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      
-        // Clean up
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-      
-        const animationCount = optimizedAnimations.length;
-        const importedCount = importedAnimations.length;
-        const originalCount = Math.max(0, animationCount - importedCount);
-        const fileSize = (blob.size / (1024 * 1024)).toFixed(2);
-      
-        toast.success(`تم تصدير المودل بصيغة FBX Binary بنجاح! (${originalCount} أصلية + ${importedCount} مستوردة، ${fileSize}MB)`);
-        
-      } catch (exportError) {
-        console.error('FBX Export Error:', exportError);
-        throw new Error(`فشل في تصدير FBX: ${exportError instanceof Error ? exportError.message : 'خطأ غير معروف'}`);
+        const jsonString = JSON.stringify(result, null, 2);
+        blob = new Blob([jsonString], { type: 'model/gltf+json' });
+        filename = `model_${Date.now()}.gltf`;
       }
+      
+      // Validate blob before download
+      if (blob.size === 0) {
+        throw new Error('العملية نتجت عنها ملف فارغ');
+      }
+      
+      console.log(`Export blob created: ${blob.size} bytes, type: ${blob.type}`);
+      
+      // Download file
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      // Clean up
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      
+      const animationCount = optimizedAnimations.length;
+      const importedCount = importedAnimations.length;
+      const originalCount = Math.max(0, animationCount - importedCount);
+      const fileSize = (blob.size / (1024 * 1024)).toFixed(2);
+      
+      toast.success(`تم تصدير المودل بنجاح! (${originalCount} أصلية + ${importedCount} مستوردة، ${fileSize}MB)`);
     } catch (error) {
       console.error('Export error:', error);
       const errorMessage = error instanceof Error ? error.message : 'خطأ غير معروف';
-      toast.error(`خطأ في تصدير المودل FBX: ${errorMessage}`);
+      toast.error(`خطأ في تصدير المودل: ${errorMessage}`);
       
       // Log additional debug info
       console.error('Export debug info:', {
@@ -193,50 +222,48 @@ export const ModelExporter = ({
               <li>• أنميشن مستوردة: <span className="font-semibold text-accent-foreground">{importedCount}</span></li>
               <li>• سيتم تحسين وتنظيف البيانات قبل التصدير</li>
               {hasImportedAnimations && <li>• تم دمج أنميشن Mixamo مع السكيلتون الأصلي</li>}
-              <li>• تنسيق FBX Binary متوافق مع Blender 2.8+ و Maya و 3ds Max</li>
             </ul>
           </div>
 
-          <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20">
-            <h3 className="font-medium text-green-700 dark:text-green-400 mb-2 flex items-center gap-2">
-              <CheckCircle className="w-4 h-4" />
-              مُحسَّن للتوافق مع بلندر:
-            </h3>
-            <ul className="text-xs text-green-600 dark:text-green-300 space-y-1">
-              <li>✅ تنسيق FBX Binary صحيح (Blender 2.8+)</li>
-              <li>✅ مقياس صحيح (1 وحدة = 1 سم)</li>
-              <li>✅ محاور صحيحة (Y-Up, Z-Forward)</li>
-              <li>✅ هيكل FBX كامل مع Geometry وMaterials</li>
-              <li>✅ الأنميشن والعظام محفوظة بشكل صحيح</li>
-              <li>✅ تم اختبار التوافق مع Blender 3.0+</li>
-            </ul>
-          </div>
-
-          <div className="w-full">
+          <div className="grid grid-cols-2 gap-3">
             <Button
-              onClick={exportModel}
-              className="w-full gradient-primary text-white shadow-glow"
-              size="lg"
+              onClick={() => exportModel('glb')}
+              className="gradient-primary text-white shadow-glow"
+              size="sm"
               disabled={isExporting}
             >
               {isExporting ? (
-                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               ) : (
-                <Download className="w-5 h-5 mr-2" />
+                <Download className="w-4 h-4 mr-2" />
               )}
-              تصدير FBX
+              تصدير GLB
+            </Button>
+            
+            <Button
+              onClick={() => exportModel('gltf')}
+              variant="outline"
+              className="bg-secondary/10 border-secondary/20 text-secondary-foreground hover:bg-secondary/20"
+              size="sm"
+              disabled={isExporting}
+            >
+              {isExporting ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Download className="w-4 h-4 mr-2" />
+              )}
+              تصدير GLTF
             </Button>
           </div>
 
           <div className="text-xs text-muted-foreground text-center mt-3">
-            <p>FBX Binary v2.0: مُحسَّن خصيصاً للتوافق مع Blender وجميع التطبيقات</p>
-            <p className="text-green-600 mt-1">✅ تم إصلاح جميع مشاكل التوافق والاستيراد</p>
-            <p className="text-blue-600 mt-1">🔧 هيكل FBX كامل مع جميع البيانات المطلوبة</p>
+            <p>GLB: ملف واحد مضغوط محسّن | GLTF: ملف JSON منظم</p>
+            <p className="text-accent-foreground mt-1">تم تحسين الملفات للتوافق الأمثل مع جميع التطبيقات</p>
             {isExporting && (
               <div className="text-primary mt-2">
                 <div className="flex items-center justify-center gap-2">
                   <Loader2 className="w-3 h-3 animate-spin" />
-                  <span>جاري إنشاء ملف FBX Binary محسّن...</span>
+                  <span>جاري معالجة وتصدير الملف...</span>
                 </div>
               </div>
             )}
