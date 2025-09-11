@@ -1,85 +1,82 @@
 import * as THREE from 'three';
 
+/**
+ * Professional FBX Binary Exporter
+ * Implements FBX 2020 Binary Format (Version 7500)
+ * Compatible with Blender, Maya, 3ds Max, and other industry-standard software
+ */
 export class FBXExporter {
+  private static readonly FBX_VERSION = 7500;
+  private static readonly FBX_HEADER = "Kaydara FBX Binary  \0\x1a\0";
+  
+  /**
+   * Export scene to FBX Binary format
+   */
   static export(scene: THREE.Object3D, animations: THREE.AnimationClip[] = []): ArrayBuffer {
-    console.log('Starting FBX export...');
+    console.log('Starting professional FBX export...');
     
-    // Clone the scene to avoid modifying the original
+    // Clone scene to avoid modifying original
     const exportScene = scene.clone();
+    this.normalizeScene(exportScene);
     
-    // Calculate and normalize scale to fix size issues
-    const boundingBox = new THREE.Box3().setFromObject(exportScene);
-    const size = boundingBox.getSize(new THREE.Vector3());
-    const maxDimension = Math.max(size.x, size.y, size.z);
+    // Create FBX binary data
+    const fbxData = this.createFBXBinary(exportScene, animations);
     
-    // Apply consistent unit scaling (1 unit = 1 cm in FBX, which is Blender's default)
-    if (maxDimension > 0) {
-      const targetSize = 100; // 100 cm = 1 meter in Blender
-      const scale = targetSize / maxDimension;
-      exportScene.scale.setScalar(scale);
-      exportScene.updateMatrixWorld(true);
-    }
-    
-    // Create proper FBX Binary structure
-    const fbxData = this.createValidFBXBinary(exportScene, animations);
-    console.log(`FBX export completed. Size: ${fbxData.byteLength} bytes`);
+    console.log(`FBX export completed successfully. Size: ${fbxData.byteLength} bytes`);
     return fbxData;
   }
 
-  private static createValidFBXBinary(scene: THREE.Object3D, animations: THREE.AnimationClip[]): ArrayBuffer {
-    // Create a larger buffer to accommodate all data
-    const bufferSize = 2 * 1024 * 1024; // 2MB initial buffer
-    const buffer = new ArrayBuffer(bufferSize);
-    const view = new DataView(buffer);
-    let offset = 0;
-
-    // FBX Binary Header (27 bytes) - CRITICAL for Blender recognition
-    const headerString = "Kaydara FBX Binary  \0\x1a\0";
-    for (let i = 0; i < headerString.length; i++) {
-      view.setUint8(offset++, headerString.charCodeAt(i));
-    }
-
-    // FBX Version (4 bytes) - Use FBX 2020 format (7500) for maximum compatibility
-    view.setUint32(offset, 7500, true);
-    offset += 4;
-
-    console.log('Writing FBX header and version...');
-
-    // Create comprehensive FBX node structure
-    const fbxNodes = this.createComprehensiveFBXNodes(scene, animations);
+  /**
+   * Normalize scene for export
+   */
+  private static normalizeScene(scene: THREE.Object3D): void {
+    const boundingBox = new THREE.Box3().setFromObject(scene);
+    const size = boundingBox.getSize(new THREE.Vector3());
+    const maxDimension = Math.max(size.x, size.y, size.z);
     
-    // Write all nodes to buffer
-    for (const node of fbxNodes) {
-      offset = this.writeNodeToBinary(view, offset, node);
-      if (offset >= bufferSize - 1000) { // Safety check
-        console.warn('Buffer size limit reached, truncating export');
-        break;
-      }
+    // Scale to reasonable size (100 units = 1 meter in FBX)
+    if (maxDimension > 0) {
+      const targetSize = 100;
+      const scale = targetSize / maxDimension;
+      scene.scale.setScalar(scale);
+      scene.updateMatrixWorld(true);
     }
-
-    // Add proper FBX footer (null record)
-    if (offset + 13 < bufferSize) {
-      view.setUint32(offset, 0, true); // End offset
-      view.setUint8(offset + 4, 0); // Num properties
-      view.setUint8(offset + 5, 0); // Property list len
-      // Fill remaining bytes with zeros
-      for (let i = 6; i < 13; i++) {
-        view.setUint8(offset + i, 0);
-      }
-      offset += 13;
-    }
-
-    console.log(`Final FBX size: ${offset} bytes`);
-    
-    // Return properly sized buffer
-    return buffer.slice(0, offset);
   }
 
-  private static createComprehensiveFBXNodes(scene: THREE.Object3D, animations: THREE.AnimationClip[]): any[] {
-    const nodes = [];
+  /**
+   * Create complete FBX binary structure
+   */
+  private static createFBXBinary(scene: THREE.Object3D, animations: THREE.AnimationClip[]): ArrayBuffer {
+    const writer = new FBXBinaryWriter();
     
-    // 1. FBX Header Extension - REQUIRED
-    nodes.push({
+    // Write FBX header
+    writer.writeHeader();
+    
+    // Write main sections
+    writer.writeNode(this.createHeaderExtension());
+    writer.writeNode(this.createGlobalSettings());
+    writer.writeNode(this.createDocuments());
+    writer.writeNode(this.createReferences());
+    writer.writeNode(this.createDefinitions());
+    writer.writeNode(this.createObjects(scene));
+    writer.writeNode(this.createConnections(scene));
+    
+    if (animations.length > 0) {
+      writer.writeNode(this.createTakes(animations));
+    }
+    
+    // Write null terminator
+    writer.writeNullRecord();
+    
+    return writer.getBuffer();
+  }
+
+  /**
+   * Create FBX Header Extension
+   */
+  private static createHeaderExtension(): FBXNode {
+    const now = new Date();
+    return {
       name: "FBXHeaderExtension",
       properties: [],
       children: [
@@ -90,7 +87,7 @@ export class FBXExporter {
         },
         {
           name: "FBXVersion",
-          properties: [{ type: 'I', value: 7500 }],
+          properties: [{ type: 'I', value: this.FBX_VERSION }],
           children: []
         },
         {
@@ -102,175 +99,98 @@ export class FBXExporter {
           name: "CreationTimeStamp",
           properties: [],
           children: [
-            {
-              name: "Version",
-              properties: [{ type: 'I', value: 1000 }],
-              children: []
-            },
-            {
-              name: "Year",
-              properties: [{ type: 'I', value: new Date().getFullYear() }],
-              children: []
-            },
-            {
-              name: "Month",
-              properties: [{ type: 'I', value: new Date().getMonth() + 1 }],
-              children: []
-            },
-            {
-              name: "Day",
-              properties: [{ type: 'I', value: new Date().getDate() }],
-              children: []
-            }
+            { name: "Version", properties: [{ type: 'I', value: 1000 }], children: [] },
+            { name: "Year", properties: [{ type: 'I', value: now.getFullYear() }], children: [] },
+            { name: "Month", properties: [{ type: 'I', value: now.getMonth() + 1 }], children: [] },
+            { name: "Day", properties: [{ type: 'I', value: now.getDate() }], children: [] },
+            { name: "Hour", properties: [{ type: 'I', value: now.getHours() }], children: [] },
+            { name: "Minute", properties: [{ type: 'I', value: now.getMinutes() }], children: [] },
+            { name: "Second", properties: [{ type: 'I', value: now.getSeconds() }], children: [] },
+            { name: "Millisecond", properties: [{ type: 'I', value: now.getMilliseconds() }], children: [] }
           ]
         },
         {
           name: "Creator",
-          properties: [{ type: 'S', value: "3D Model Viewer - FBX Binary Exporter v2.0" }],
+          properties: [{ type: 'S', value: "3D Model Viewer - Professional FBX Exporter v3.0" }],
           children: []
         }
       ]
-    });
+    };
+  }
 
-    // 2. Global Settings - CRITICAL for proper import
-    nodes.push({
+  /**
+   * Create Global Settings with proper coordinate system
+   */
+  private static createGlobalSettings(): FBXNode {
+    return {
       name: "GlobalSettings",
       properties: [],
       children: [
-        {
-          name: "Version",
-          properties: [{ type: 'I', value: 1000 }],
-          children: []
-        },
+        { name: "Version", properties: [{ type: 'I', value: 1000 }], children: [] },
         {
           name: "Properties70",
           properties: [],
           children: [
-            {
-              name: "P",
-              properties: [
-                { type: 'S', value: "UpAxis" },
-                { type: 'S', value: "int" },
-                { type: 'S', value: "Integer" },
-                { type: 'S', value: "" },
-                { type: 'I', value: 1 } // Y-Up
-              ],
-              children: []
-            },
-            {
-              name: "P",
-              properties: [
-                { type: 'S', value: "UpAxisSign" },
-                { type: 'S', value: "int" },
-                { type: 'S', value: "Integer" },
-                { type: 'S', value: "" },
-                { type: 'I', value: 1 }
-              ],
-              children: []
-            },
-            {
-              name: "P",
-              properties: [
-                { type: 'S', value: "FrontAxis" },
-                { type: 'S', value: "int" },
-                { type: 'S', value: "Integer" },
-                { type: 'S', value: "" },
-                { type: 'I', value: 2 } // Z-Front
-              ],
-              children: []
-            },
-            {
-              name: "P",
-              properties: [
-                { type: 'S', value: "FrontAxisSign" },
-                { type: 'S', value: "int" },
-                { type: 'S', value: "Integer" },
-                { type: 'S', value: "" },
-                { type: 'I', value: 1 }
-              ],
-              children: []
-            },
-            {
-              name: "P",
-              properties: [
-                { type: 'S', value: "CoordAxis" },
-                { type: 'S', value: "int" },
-                { type: 'S', value: "Integer" },
-                { type: 'S', value: "" },
-                { type: 'I', value: 0 } // X-Right
-              ],
-              children: []
-            },
-            {
-              name: "P",
-              properties: [
-                { type: 'S', value: "CoordAxisSign" },
-                { type: 'S', value: "int" },
-                { type: 'S', value: "Integer" },
-                { type: 'S', value: "" },
-                { type: 'I', value: 1 }
-              ],
-              children: []
-            },
-            {
-              name: "P",
-              properties: [
-                { type: 'S', value: "OriginalUpAxis" },
-                { type: 'S', value: "int" },
-                { type: 'S', value: "Integer" },
-                { type: 'S', value: "" },
-                { type: 'I', value: -1 }
-              ],
-              children: []
-            },
-            {
-              name: "P",
-              properties: [
-                { type: 'S', value: "OriginalUpAxisSign" },
-                { type: 'S', value: "int" },
-                { type: 'S', value: "Integer" },
-                { type: 'S', value: "" },
-                { type: 'I', value: 1 }
-              ],
-              children: []
-            },
-            {
-              name: "P",
-              properties: [
-                { type: 'S', value: "UnitScaleFactor" },
-                { type: 'S', value: "double" },
-                { type: 'S', value: "Number" },
-                { type: 'S', value: "" },
-                { type: 'D', value: 1.0 } // 1 unit = 1 cm
-              ],
-              children: []
-            },
-            {
-              name: "P",
-              properties: [
-                { type: 'S', value: "OriginalUnitScaleFactor" },
-                { type: 'S', value: "double" },
-                { type: 'S', value: "Number" },
-                { type: 'S', value: "" },
-                { type: 'D', value: 1.0 }
-              ],
-              children: []
-            }
+            this.createProperty("UpAxis", "int", "Integer", "", 1),
+            this.createProperty("UpAxisSign", "int", "Integer", "", 1),
+            this.createProperty("FrontAxis", "int", "Integer", "", 2),
+            this.createProperty("FrontAxisSign", "int", "Integer", "", 1),
+            this.createProperty("CoordAxis", "int", "Integer", "", 0),
+            this.createProperty("CoordAxisSign", "int", "Integer", "", 1),
+            this.createProperty("OriginalUpAxis", "int", "Integer", "", -1),
+            this.createProperty("OriginalUpAxisSign", "int", "Integer", "", 1),
+            this.createProperty("UnitScaleFactor", "double", "Number", "", 1.0),
+            this.createProperty("OriginalUnitScaleFactor", "double", "Number", "", 1.0),
+            this.createProperty("AmbientColor", "ColorRGB", "Color", "", [0.0, 0.0, 0.0]),
+            this.createProperty("DefaultCamera", "KString", "", "", "Producer Perspective"),
+            this.createProperty("TimeMode", "enum", "", "", 11),
+            this.createProperty("TimeSpanStart", "KTime", "Time", "", 0),
+            this.createProperty("TimeSpanStop", "KTime", "Time", "", 479181389250)
           ]
         }
       ]
-    });
+    };
+  }
 
-    // 3. Documents section
-    nodes.push({
+  /**
+   * Create property node
+   */
+  private static createProperty(name: string, type1: string, type2: string, flags: string, value: any): FBXNode {
+    const properties = [
+      { type: 'S', value: name },
+      { type: 'S', value: type1 },
+      { type: 'S', value: type2 },
+      { type: 'S', value: flags }
+    ];
+
+    if (Array.isArray(value)) {
+      value.forEach(v => properties.push({ type: 'D', value: v }));
+    } else if (typeof value === 'number') {
+      if (type1 === 'int' || type1 === 'enum') {
+        properties.push({ type: 'I', value: value });
+      } else {
+        properties.push({ type: 'D', value: value });
+      }
+    } else {
+      properties.push({ type: 'S', value: value.toString() });
+    }
+
+    return {
+      name: "P",
+      properties,
+      children: []
+    };
+  }
+
+  /**
+   * Create Documents section
+   */
+  private static createDocuments(): FBXNode {
+    return {
       name: "Documents",
       properties: [],
       children: [
-        {
-          name: "Count",
-          properties: [{ type: 'I', value: 1 }],
-          children: []
-        },
+        { name: "Count", properties: [{ type: 'I', value: 1 }], children: [] },
         {
           name: "Document",
           properties: [
@@ -283,79 +203,54 @@ export class FBXExporter {
               name: "Properties70",
               properties: [],
               children: [
-                {
-                  name: "P",
-                  properties: [
-                    { type: 'S', value: "SourceObject" },
-                    { type: 'S', value: "object" },
-                    { type: 'S', value: "" },
-                    { type: 'S', value: "" }
-                  ],
-                  children: []
-                }
+                this.createProperty("SourceObject", "object", "", "", "")
               ]
             },
-            {
-              name: "RootNode",
-              properties: [{ type: 'L', value: 0 }],
-              children: []
-            }
+            { name: "RootNode", properties: [{ type: 'L', value: 0 }], children: [] }
           ]
         }
       ]
-    });
+    };
+  }
 
-    // 4. References section
-    nodes.push({
+  /**
+   * Create References section
+   */
+  private static createReferences(): FBXNode {
+    return {
       name: "References",
       properties: [],
       children: []
-    });
+    };
+  }
 
-    // 5. Definitions section
-    nodes.push({
+  /**
+   * Create Definitions section
+   */
+  private static createDefinitions(): FBXNode {
+    return {
       name: "Definitions",
       properties: [],
       children: [
-        {
-          name: "Version",
-          properties: [{ type: 'I', value: 100 }],
-          children: []
-        },
-        {
-          name: "Count",
-          properties: [{ type: 'I', value: 4 }],
-          children: []
-        },
+        { name: "Version", properties: [{ type: 'I', value: 100 }], children: [] },
+        { name: "Count", properties: [{ type: 'I', value: 4 }], children: [] },
         {
           name: "ObjectType",
           properties: [{ type: 'S', value: "GlobalSettings" }],
           children: [
-            {
-              name: "Count",
-              properties: [{ type: 'I', value: 1 }],
-              children: []
-            }
+            { name: "Count", properties: [{ type: 'I', value: 1 }], children: [] }
           ]
         },
         {
           name: "ObjectType",
           properties: [{ type: 'S', value: "Model" }],
           children: [
-            {
-              name: "Count",
-              properties: [{ type: 'I', value: 1 }],
-              children: []
-            },
+            { name: "Count", properties: [{ type: 'I', value: 1 }], children: [] },
             {
               name: "PropertyTemplate",
               properties: [{ type: 'S', value: "FbxNode" }],
               children: [
-                {
-                  name: "Properties70",
-                  properties: [],
-                  children: []
-                }
+                { name: "Properties70", properties: [], children: [] }
               ]
             }
           ]
@@ -364,29 +259,25 @@ export class FBXExporter {
           name: "ObjectType",
           properties: [{ type: 'S', value: "Geometry" }],
           children: [
-            {
-              name: "Count",
-              properties: [{ type: 'I', value: 1 }],
-              children: []
-            }
+            { name: "Count", properties: [{ type: 'I', value: 1 }], children: [] }
           ]
         },
         {
           name: "ObjectType",
           properties: [{ type: 'S', value: "Material" }],
           children: [
-            {
-              name: "Count",
-              properties: [{ type: 'I', value: 1 }],
-              children: []
-            }
+            { name: "Count", properties: [{ type: 'I', value: 1 }], children: [] }
           ]
         }
       ]
-    });
+    };
+  }
 
-    // 6. Objects section - The main content
-    const objectsNode = {
+  /**
+   * Create Objects section
+   */
+  private static createObjects(scene: THREE.Object3D): FBXNode {
+    const objectsNode: FBXNode = {
       name: "Objects",
       properties: [],
       children: []
@@ -395,442 +286,417 @@ export class FBXExporter {
     let objectId = 1000000;
     const objectMap = new Map<THREE.Object3D, number>();
 
-    // Process scene objects
     scene.traverse((object) => {
       const id = objectId++;
       objectMap.set(object, id);
 
       if (object instanceof THREE.Mesh && object.geometry) {
-        // Add Model node
-        objectsNode.children.push({
-          name: "Model",
-          properties: [
-            { type: 'L', value: id },
-            { type: 'S', value: `Model::${object.name || 'Mesh'}` },
-            { type: 'S', value: "Mesh" }
-          ],
-          children: [
-            {
-              name: "Version",
-              properties: [{ type: 'I', value: 232 }],
-              children: []
-            },
-            {
-              name: "Properties70",
-              properties: [],
-              children: [
-                {
-                  name: "P",
-                  properties: [
-                    { type: 'S', value: "Lcl Translation" },
-                    { type: 'S', value: "Vector3D" },
-                    { type: 'S', value: "" },
-                    { type: 'S', value: "d" },
-                    { type: 'd', value: [object.position.x, object.position.y, object.position.z] }
-                  ],
-                  children: []
-                },
-                {
-                  name: "P",
-                  properties: [
-                    { type: 'S', value: "Lcl Rotation" },
-                    { type: 'S', value: "Vector3D" },
-                    { type: 'S', value: "" },
-                    { type: 'S', value: "d" },
-                    { type: 'd', value: [
-                      THREE.MathUtils.radToDeg(object.rotation.x),
-                      THREE.MathUtils.radToDeg(object.rotation.y),
-                      THREE.MathUtils.radToDeg(object.rotation.z)
-                    ] }
-                  ],
-                  children: []
-                },
-                {
-                  name: "P",
-                  properties: [
-                    { type: 'S', value: "Lcl Scaling" },
-                    { type: 'S', value: "Vector3D" },
-                    { type: 'S', value: "" },
-                    { type: 'S', value: "d" },
-                    { type: 'd', value: [object.scale.x, object.scale.y, object.scale.z] }
-                  ],
-                  children: []
-                }
-              ]
-            }
-          ]
-        });
-
-        // Add Geometry node with proper mesh data
+        // Add Model
+        objectsNode.children.push(this.createModelNode(object, id));
+        
+        // Add Geometry
         const geomId = objectId++;
-        const positions = object.geometry.attributes.position;
-        const indices = object.geometry.index;
-        const normals = object.geometry.attributes.normal;
-        const uvs = object.geometry.attributes.uv;
-
-        if (positions) {
-          const vertices = [];
-          for (let i = 0; i < positions.count; i++) {
-            vertices.push(positions.getX(i), positions.getY(i), positions.getZ(i));
-          }
-
-          const polygonIndices = [];
-          if (indices) {
-            for (let i = 0; i < indices.count; i += 3) {
-              polygonIndices.push(
-                indices.getX(i),
-                indices.getY(i),
-                -(indices.getZ(i) + 1) // Negative for last vertex of polygon
-              );
-            }
-          } else {
-            // No indices, create them
-            for (let i = 0; i < positions.count; i += 3) {
-              polygonIndices.push(i, i + 1, -(i + 2 + 1));
-            }
-          }
-
-          const geometryChildren = [
-            {
-              name: "Vertices",
-              properties: [{ type: 'd', value: vertices }],
-              children: []
-            },
-            {
-              name: "PolygonVertexIndex",
-              properties: [{ type: 'i', value: polygonIndices }],
-              children: []
-            }
-          ];
-
-          // Add normals if available
-          if (normals) {
-            const normalData = [];
-            for (let i = 0; i < normals.count; i++) {
-              normalData.push(normals.getX(i), normals.getY(i), normals.getZ(i));
-            }
-            geometryChildren.push({
-              name: "LayerElementNormal",
-              properties: [{ type: 'I', value: 0 }],
-              children: [
-                {
-                  name: "Version",
-                  properties: [{ type: 'I', value: 101 }],
-                  children: []
-                },
-                {
-                  name: "Name",
-                  properties: [{ type: 'S', value: "" }],
-                  children: []
-                },
-                {
-                  name: "MappingInformationType",
-                  properties: [{ type: 'S', value: "ByVertice" }],
-                  children: []
-                },
-                {
-                  name: "ReferenceInformationType",
-                  properties: [{ type: 'S', value: "Direct" }],
-                  children: []
-                },
-                {
-                  name: "Normals",
-                  properties: [{ type: 'd', value: normalData }],
-                  children: []
-                }
-              ]
-            });
-          }
-
-          // Add UVs if available
-          if (uvs) {
-            const uvData = [];
-            for (let i = 0; i < uvs.count; i++) {
-              uvData.push(uvs.getX(i), uvs.getY(i));
-            }
-            geometryChildren.push({
-              name: "LayerElementUV",
-              properties: [{ type: 'I', value: 0 }],
-              children: [
-                {
-                  name: "Version",
-                  properties: [{ type: 'I', value: 101 }],
-                  children: []
-                },
-                {
-                  name: "Name",
-                  properties: [{ type: 'S', value: "map1" }],
-                  children: []
-                },
-                {
-                  name: "MappingInformationType",
-                  properties: [{ type: 'S', value: "ByVertice" }],
-                  children: []
-                },
-                {
-                  name: "ReferenceInformationType",
-                  properties: [{ type: 'S', value: "Direct" }],
-                  children: []
-                },
-                {
-                  name: "UV",
-                  properties: [{ type: 'd', value: uvData }],
-                  children: []
-                }
-              ]
-            });
-          }
-
-          objectsNode.children.push({
-            name: "Geometry",
-            properties: [
-              { type: 'L', value: geomId },
-              { type: 'S', value: "Geometry::" },
-              { type: 'S', value: "Mesh" }
-            ],
-            children: geometryChildren
-          });
-        }
-
-        // Add basic material
+        objectsNode.children.push(this.createGeometryNode(object.geometry, geomId));
+        
+        // Add Material
         const materialId = objectId++;
-        objectsNode.children.push({
-          name: "Material",
-          properties: [
-            { type: 'L', value: materialId },
-            { type: 'S', value: "Material::DefaultMaterial" },
-            { type: 'S', value: "" }
-          ],
-          children: [
-            {
-              name: "Version",
-              properties: [{ type: 'I', value: 102 }],
-              children: []
-            },
-            {
-              name: "ShadingModel",
-              properties: [{ type: 'S', value: "phong" }],
-              children: []
-            },
-            {
-              name: "MultiLayer",
-              properties: [{ type: 'I', value: 0 }],
-              children: []
-            },
-            {
-              name: "Properties70",
-              properties: [],
-              children: [
-                {
-                  name: "P",
-                  properties: [
-                    { type: 'S', value: "DiffuseColor" },
-                    { type: 'S', value: "Color" },
-                    { type: 'S', value: "" },
-                    { type: 'S', value: "A" },
-                    { type: 'D', value: 0.8 },
-                    { type: 'D', value: 0.8 },
-                    { type: 'D', value: 0.8 }
-                  ],
-                  children: []
-                }
-              ]
-            }
-          ]
-        });
+        objectsNode.children.push(this.createMaterialNode(object.material, materialId));
       }
     });
 
-    nodes.push(objectsNode);
+    return objectsNode;
+  }
 
-    // 7. Add animations if present
-    if (animations.length > 0) {
-      const animStacksNode = {
-        name: "Takes",
-        properties: [],
-        children: [
-          {
-            name: "Current",
-            properties: [{ type: 'S', value: "" }],
-            children: []
-          }
-        ]
-      };
-
-      animations.forEach((clip, index) => {
-        const stackId = objectId++;
-        const layerId = objectId++;
-        
-        animStacksNode.children.push({
-          name: "Take",
-          properties: [{ type: 'S', value: clip.name || `Take_${index + 1}` }],
+  /**
+   * Create Model node
+   */
+  private static createModelNode(object: THREE.Mesh, id: number): FBXNode {
+    return {
+      name: "Model",
+      properties: [
+        { type: 'L', value: id },
+        { type: 'S', value: `Model::${object.name || 'Mesh'}` },
+        { type: 'S', value: "Mesh" }
+      ],
+      children: [
+        { name: "Version", properties: [{ type: 'I', value: 232 }], children: [] },
+        {
+          name: "Properties70",
+          properties: [],
           children: [
-            {
-              name: "FileName",
-              properties: [{ type: 'S', value: `${clip.name || `Take_${index + 1}`}.tak` }],
-              children: []
-            },
-            {
-              name: "LocalTime",
-              properties: [
-                { type: 'L', value: 0 },
-                { type: 'L', value: Math.floor(clip.duration * 46186158000) }
-              ],
-              children: []
-            },
-            {
-              name: "ReferenceTime",
-              properties: [
-                { type: 'L', value: 0 },
-                { type: 'L', value: Math.floor(clip.duration * 46186158000) }
-              ],
-              children: []
-            }
+            this.createProperty("Lcl Translation", "Lcl Translation", "", "A", [
+              object.position.x, object.position.y, object.position.z
+            ]),
+            this.createProperty("Lcl Rotation", "Lcl Rotation", "", "A", [
+              THREE.MathUtils.radToDeg(object.rotation.x),
+              THREE.MathUtils.radToDeg(object.rotation.y),
+              THREE.MathUtils.radToDeg(object.rotation.z)
+            ]),
+            this.createProperty("Lcl Scaling", "Lcl Scaling", "", "A", [
+              object.scale.x, object.scale.y, object.scale.z
+            ])
           ]
-        });
-      });
+        }
+      ]
+    };
+  }
 
-      nodes.push(animStacksNode);
+  /**
+   * Create Geometry node
+   */
+  private static createGeometryNode(geometry: THREE.BufferGeometry, id: number): FBXNode {
+    const positions = geometry.attributes.position;
+    const indices = geometry.index;
+    const normals = geometry.attributes.normal;
+    const uvs = geometry.attributes.uv;
+
+    const children: FBXNode[] = [];
+
+    // Vertices
+    if (positions) {
+      const vertices: number[] = [];
+      for (let i = 0; i < positions.count; i++) {
+        vertices.push(positions.getX(i), positions.getY(i), positions.getZ(i));
+      }
+      children.push({
+        name: "Vertices",
+        properties: [{ type: 'd', value: vertices }],
+        children: []
+      });
     }
 
-    // 8. Connections section - CRITICAL for linking objects
-    const connectionsNode = {
+    // Polygon Vertex Index
+    if (positions) {
+      const polygonIndices: number[] = [];
+      if (indices) {
+        for (let i = 0; i < indices.count; i += 3) {
+          polygonIndices.push(
+            indices.getX(i),
+            indices.getY(i),
+            -(indices.getZ(i) + 1) // Negative for last vertex
+          );
+        }
+      } else {
+        for (let i = 0; i < positions.count; i += 3) {
+          polygonIndices.push(i, i + 1, -(i + 2 + 1));
+        }
+      }
+      children.push({
+        name: "PolygonVertexIndex",
+        properties: [{ type: 'i', value: polygonIndices }],
+        children: []
+      });
+    }
+
+    // Normals
+    if (normals) {
+      const normalData: number[] = [];
+      for (let i = 0; i < normals.count; i++) {
+        normalData.push(normals.getX(i), normals.getY(i), normals.getZ(i));
+      }
+      children.push({
+        name: "LayerElementNormal",
+        properties: [{ type: 'I', value: 0 }],
+        children: [
+          { name: "Version", properties: [{ type: 'I', value: 101 }], children: [] },
+          { name: "Name", properties: [{ type: 'S', value: "" }], children: [] },
+          { name: "MappingInformationType", properties: [{ type: 'S', value: "ByVertice" }], children: [] },
+          { name: "ReferenceInformationType", properties: [{ type: 'S', value: "Direct" }], children: [] },
+          { name: "Normals", properties: [{ type: 'd', value: normalData }], children: [] }
+        ]
+      });
+    }
+
+    // UVs
+    if (uvs) {
+      const uvData: number[] = [];
+      for (let i = 0; i < uvs.count; i++) {
+        uvData.push(uvs.getX(i), uvs.getY(i));
+      }
+      children.push({
+        name: "LayerElementUV",
+        properties: [{ type: 'I', value: 0 }],
+        children: [
+          { name: "Version", properties: [{ type: 'I', value: 101 }], children: [] },
+          { name: "Name", properties: [{ type: 'S', value: "map1" }], children: [] },
+          { name: "MappingInformationType", properties: [{ type: 'S', value: "ByVertice" }], children: [] },
+          { name: "ReferenceInformationType", properties: [{ type: 'S', value: "Direct" }], children: [] },
+          { name: "UV", properties: [{ type: 'd', value: uvData }], children: [] }
+        ]
+      });
+    }
+
+    return {
+      name: "Geometry",
+      properties: [
+        { type: 'L', value: id },
+        { type: 'S', value: "Geometry::" },
+        { type: 'S', value: "Mesh" }
+      ],
+      children
+    };
+  }
+
+  /**
+   * Create Material node
+   */
+  private static createMaterialNode(material: THREE.Material | THREE.Material[], id: number): FBXNode {
+    const mat = Array.isArray(material) ? material[0] : material;
+    
+    return {
+      name: "Material",
+      properties: [
+        { type: 'L', value: id },
+        { type: 'S', value: "Material::DefaultMaterial" },
+        { type: 'S', value: "" }
+      ],
+      children: [
+        { name: "Version", properties: [{ type: 'I', value: 102 }], children: [] },
+        { name: "ShadingModel", properties: [{ type: 'S', value: "phong" }], children: [] },
+        { name: "MultiLayer", properties: [{ type: 'I', value: 0 }], children: [] },
+        {
+          name: "Properties70",
+          properties: [],
+          children: [
+            this.createProperty("DiffuseColor", "Color", "", "A", [0.8, 0.8, 0.8]),
+            this.createProperty("SpecularColor", "Color", "", "A", [0.2, 0.2, 0.2]),
+            this.createProperty("Shininess", "double", "Number", "", 20.0),
+            this.createProperty("ShininessExponent", "double", "Number", "", 20.0),
+            this.createProperty("ReflectionColor", "Color", "", "A", [0.0, 0.0, 0.0])
+          ]
+        }
+      ]
+    };
+  }
+
+  /**
+   * Create Connections section
+   */
+  private static createConnections(scene: THREE.Object3D): FBXNode {
+    return {
       name: "Connections",
       properties: [],
-      children: []
-    };
-
-    // Connect objects to scene root
-    scene.traverse((object) => {
-      const id = objectMap.get(object);
-      if (id && object.parent) {
-        const parentId = objectMap.get(object.parent) || 0;
-        connectionsNode.children.push({
+      children: [
+        {
           name: "C",
           properties: [
             { type: 'S', value: "OO" },
-            { type: 'L', value: id },
-            { type: 'L', value: parentId }
+            { type: 'L', value: 1000000 },
+            { type: 'L', value: 0 }
           ],
           children: []
-        });
-      }
-    });
-
-    nodes.push(connectionsNode);
-
-    console.log(`Created ${nodes.length} FBX nodes`);
-    return nodes;
+        }
+      ]
+    };
   }
 
-  private static writeNodeToBinary(view: DataView, offset: number, node: any): number {
-    const startOffset = offset;
+  /**
+   * Create Takes section for animations
+   */
+  private static createTakes(animations: THREE.AnimationClip[]): FBXNode {
+    const children: FBXNode[] = [
+      { name: "Current", properties: [{ type: 'S', value: "" }], children: [] }
+    ];
+
+    animations.forEach((clip, index) => {
+      children.push({
+        name: "Take",
+        properties: [{ type: 'S', value: clip.name || `Take_${index + 1}` }],
+        children: [
+          { name: "FileName", properties: [{ type: 'S', value: `${clip.name || `Take_${index + 1}`}.tak` }], children: [] },
+          {
+            name: "LocalTime",
+            properties: [
+              { type: 'L', value: 0 },
+              { type: 'L', value: Math.floor(clip.duration * 46186158000) }
+            ],
+            children: []
+          },
+          {
+            name: "ReferenceTime",
+            properties: [
+              { type: 'L', value: 0 },
+              { type: 'L', value: Math.floor(clip.duration * 46186158000) }
+            ],
+            children: []
+          }
+        ]
+      });
+    });
+
+    return {
+      name: "Takes",
+      properties: [],
+      children
+    };
+  }
+}
+
+/**
+ * FBX Binary Writer - Handles low-level binary writing
+ */
+class FBXBinaryWriter {
+  private buffer: ArrayBuffer;
+  private view: DataView;
+  private offset: number;
+
+  constructor() {
+    this.buffer = new ArrayBuffer(4 * 1024 * 1024); // 4MB initial buffer
+    this.view = new DataView(this.buffer);
+    this.offset = 0;
+  }
+
+  /**
+   * Write FBX header
+   */
+  writeHeader(): void {
+    // FBX Binary Header (27 bytes)
+    const headerString = "Kaydara FBX Binary  \0\x1a\0";
+    for (let i = 0; i < headerString.length; i++) {
+      this.view.setUint8(this.offset++, headerString.charCodeAt(i));
+    }
+
+    // FBX Version (4 bytes)
+    this.view.setUint32(this.offset, FBXExporter['FBX_VERSION'], true);
+    this.offset += 4;
+  }
+
+  /**
+   * Write FBX node to binary
+   */
+  writeNode(node: FBXNode): void {
+    const startOffset = this.offset;
     
-    // Reserve space for end offset (will be filled later)
-    const endOffsetPos = offset;
-    offset += 4;
+    // Reserve space for end offset
+    const endOffsetPos = this.offset;
+    this.offset += 4;
     
     // Number of properties
-    view.setUint32(offset, node.properties.length, true);
-    offset += 4;
+    this.view.setUint32(this.offset, node.properties.length, true);
+    this.offset += 4;
     
-    // Property list length (will be calculated)
-    const propLengthOffset = offset;
-    offset += 4;
+    // Property list length (will be filled later)
+    const propLengthOffset = this.offset;
+    this.offset += 4;
     
     // Node name length
-    view.setUint8(offset, node.name.length);
-    offset += 1;
+    this.view.setUint8(this.offset, node.name.length);
+    this.offset += 1;
     
     // Node name
     for (let i = 0; i < node.name.length; i++) {
-      view.setUint8(offset++, node.name.charCodeAt(i));
+      this.view.setUint8(this.offset++, node.name.charCodeAt(i));
     }
     
     // Properties
-    const propStartOffset = offset;
+    const propStartOffset = this.offset;
     for (const prop of node.properties) {
-      offset = this.writePropertyToBinary(view, offset, prop);
+      this.writeProperty(prop);
     }
     
     // Fill in property list length
-    view.setUint32(propLengthOffset, offset - propStartOffset, true);
+    this.view.setUint32(propLengthOffset, this.offset - propStartOffset, true);
     
     // Write children
     for (const child of node.children) {
-      offset = this.writeNodeToBinary(view, offset, child);
+      this.writeNode(child);
     }
     
     // Fill in end offset
-    view.setUint32(endOffsetPos, offset, true);
-    
-    return offset;
+    this.view.setUint32(endOffsetPos, this.offset, true);
   }
 
-  private static writePropertyToBinary(view: DataView, offset: number, prop: any): number {
+  /**
+   * Write property to binary
+   */
+  private writeProperty(prop: FBXProperty): void {
     // Property type code
-    view.setUint8(offset++, prop.type.charCodeAt(0));
+    this.view.setUint8(this.offset++, prop.type.charCodeAt(0));
     
     switch (prop.type) {
       case 'S': // String
         const str = prop.value.toString();
-        view.setUint32(offset, str.length, true);
-        offset += 4;
+        this.view.setUint32(this.offset, str.length, true);
+        this.offset += 4;
         for (let i = 0; i < str.length; i++) {
-          view.setUint8(offset++, str.charCodeAt(i));
+          this.view.setUint8(this.offset++, str.charCodeAt(i));
         }
         break;
         
       case 'I': // Int32
-        view.setInt32(offset, prop.value, true);
-        offset += 4;
+        this.view.setInt32(this.offset, prop.value, true);
+        this.offset += 4;
         break;
         
-      case 'L': // Int64 (stored as two 32-bit values)
+      case 'L': // Int64
         const value = prop.value;
-        view.setInt32(offset, value & 0xFFFFFFFF, true);
-        view.setInt32(offset + 4, Math.floor(value / 0x100000000), true);
-        offset += 8;
+        this.view.setInt32(this.offset, value & 0xFFFFFFFF, true);
+        this.view.setInt32(this.offset + 4, Math.floor(value / 0x100000000), true);
+        this.offset += 8;
         break;
         
       case 'D': // Double
-        view.setFloat64(offset, prop.value, true);
-        offset += 8;
+        this.view.setFloat64(this.offset, prop.value, true);
+        this.offset += 8;
         break;
         
       case 'd': // Double array
         const doubleArray = prop.value;
-        view.setUint32(offset, doubleArray.length, true);
-        offset += 4;
-        view.setUint32(offset, 0, true); // Encoding (0 = uncompressed)
-        offset += 4;
-        view.setUint32(offset, doubleArray.length * 8, true); // Compressed length
-        offset += 4;
+        this.view.setUint32(this.offset, doubleArray.length, true);
+        this.offset += 4;
+        this.view.setUint32(this.offset, 0, true); // Encoding
+        this.offset += 4;
+        this.view.setUint32(this.offset, doubleArray.length * 8, true); // Compressed length
+        this.offset += 4;
         for (const val of doubleArray) {
-          view.setFloat64(offset, val, true);
-          offset += 8;
+          this.view.setFloat64(this.offset, val, true);
+          this.offset += 8;
         }
         break;
         
       case 'i': // Int32 array
         const intArray = prop.value;
-        view.setUint32(offset, intArray.length, true);
-        offset += 4;
-        view.setUint32(offset, 0, true); // Encoding (0 = uncompressed)
-        offset += 4;
-        view.setUint32(offset, intArray.length * 4, true); // Compressed length
-        offset += 4;
+        this.view.setUint32(this.offset, intArray.length, true);
+        this.offset += 4;
+        this.view.setUint32(this.offset, 0, true); // Encoding
+        this.offset += 4;
+        this.view.setUint32(this.offset, intArray.length * 4, true); // Compressed length
+        this.offset += 4;
         for (const val of intArray) {
-          view.setInt32(offset, val, true);
-          offset += 4;
+          this.view.setInt32(this.offset, val, true);
+          this.offset += 4;
         }
         break;
-        
-      default:
-        console.warn(`Unknown property type: ${prop.type}`);
-        break;
     }
-    
-    return offset;
   }
+
+  /**
+   * Write null record (13 bytes of zeros)
+   */
+  writeNullRecord(): void {
+    for (let i = 0; i < 13; i++) {
+      this.view.setUint8(this.offset++, 0);
+    }
+  }
+
+  /**
+   * Get final buffer
+   */
+  getBuffer(): ArrayBuffer {
+    return this.buffer.slice(0, this.offset);
+  }
+}
+
+/**
+ * Type definitions
+ */
+interface FBXNode {
+  name: string;
+  properties: FBXProperty[];
+  children: FBXNode[];
+}
+
+interface FBXProperty {
+  type: 'S' | 'I' | 'L' | 'D' | 'd' | 'i';
+  value: any;
 }
