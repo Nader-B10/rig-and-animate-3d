@@ -423,12 +423,10 @@ export class FBXExporter {
                   name: "P",
                   properties: [
                     { type: 'S', value: "Lcl Translation" },
-                    { type: 'S', value: "Lcl Translation" },
+                    { type: 'S', value: "Vector3D" },
                     { type: 'S', value: "" },
-                    { type: 'S', value: "A" },
-                    { type: 'D', value: object.position.x },
-                    { type: 'D', value: object.position.y },
-                    { type: 'D', value: object.position.z }
+                    { type: 'S', value: "" },
+                    { type: 'd', value: [object.position.x, object.position.y, object.position.z] }
                   ],
                   children: []
                 },
@@ -436,12 +434,14 @@ export class FBXExporter {
                   name: "P",
                   properties: [
                     { type: 'S', value: "Lcl Rotation" },
-                    { type: 'S', value: "Lcl Rotation" },
+                    { type: 'S', value: "Vector3D" },
                     { type: 'S', value: "" },
-                    { type: 'S', value: "A" },
-                    { type: 'D', value: THREE.MathUtils.radToDeg(object.rotation.x) },
-                    { type: 'D', value: THREE.MathUtils.radToDeg(object.rotation.y) },
-                    { type: 'D', value: THREE.MathUtils.radToDeg(object.rotation.z) }
+                    { type: 'S', value: "" },
+                    { type: 'd', value: [
+                      THREE.MathUtils.radToDeg(object.rotation.x),
+                      THREE.MathUtils.radToDeg(object.rotation.y),
+                      THREE.MathUtils.radToDeg(object.rotation.z)
+                    ] }
                   ],
                   children: []
                 },
@@ -449,12 +449,10 @@ export class FBXExporter {
                   name: "P",
                   properties: [
                     { type: 'S', value: "Lcl Scaling" },
-                    { type: 'S', value: "Lcl Scaling" },
+                    { type: 'S', value: "Vector3D" },
                     { type: 'S', value: "" },
-                    { type: 'S', value: "A" },
-                    { type: 'D', value: object.scale.x },
-                    { type: 'D', value: object.scale.y },
-                    { type: 'D', value: object.scale.z }
+                    { type: 'S', value: "" },
+                    { type: 'd', value: [object.scale.x, object.scale.y, object.scale.z] }
                   ],
                   children: []
                 }
